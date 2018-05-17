@@ -34,6 +34,10 @@ extern bool loadOBJ(const char * path,
 bool show_test_window = false;
 
 
+int exercice, camPos;
+bool day, bombilla, toonShader, showModels;
+
+
 bool light_moves = true;
 void GUI() {
 	bool show = true;
@@ -91,6 +95,14 @@ namespace Sphere {
 	void drawSphere();
 }
 
+namespace Cube {
+	void mySetupCube();
+	void myCleanupCube();
+	void myUpdateCube(const glm::mat4& transform);
+	void myDrawCube();
+	void myDrawCubesWheel(double currentTime);
+}
+
 
 
 ////////////////
@@ -112,8 +124,9 @@ namespace RenderVars {
 		bool waspressed = false;
 	} prevMouse;
 
-	float panv[3] = { 0.f, -20.f, -50.f };
+	float panv[3] = { 0.f, 0.f, 0.f };
 	float rota[2] = { 0.f, 0.f };
+	
 }
 namespace RV = RenderVars;
 
@@ -165,33 +178,62 @@ void GLinit(int width, int height) {
 	Axis::setupAxis();*/
 
 	//bool res = loadOBJ("farola.obj", vertices, uvs, normals);
-	loadOBJ("chicken.obj", vertices, uvs, normals);
+	//loadOBJ("chicken.obj", vertices, uvs, normals);
 	//loadOBJ("trump.obj", vertices, uvs, normals);
 
-	MyLoadedModel::setupModel();
+	//MyLoadedModel::setupModel();
 
-	lightPos = glm::vec3(40, 40, 0);
+	//lightPos = glm::vec3(40, 40, 0);
 
-	Sphere::setupSphere(lightPos, 1.0f);
+	//Sphere::setupSphere(lightPos, 1.0f);
+
+	Cube::mySetupCube();
 
 
+	exercice = 0;
+	camPos = 0;
 
-
-
+	day = true;
+	bombilla = false;
+	toonShader = false;
+	showModels = false;
 
 }
 
 void GLcleanup() {
 	/*Box::cleanupCube();
 	Axis::cleanupAxis();*/
-	MyLoadedModel::cleanupModel();
-	Sphere::cleanupSphere();
+	//MyLoadedModel::cleanupModel();
+	//Sphere::cleanupSphere();
 
+	Cube::myCleanupCube();
 
 }
 
 void GLrender(double currentTime) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//Ejercicio 1
+	switch (camPos) {
+		case 0:
+			RV::panv[0] = 0.f;
+			RV::panv[1] = -5.f;
+			RV::panv[2] = -40.f;
+
+			RV::rota[0] = -0.3f;
+			RV::rota[1] = 0.f;
+			break;
+		case 2:
+			RV::panv[0] = 0.f;
+			RV::panv[1] = 0.f;
+			RV::panv[2] = -25.f;
+
+			RV::rota[0] = 1.6f;
+			RV::rota[1] = 0.f;
+			break;
+		default:
+			break;
+	}
 
 	RV::_modelView = glm::mat4(1.f);
 	RV::_modelView = glm::translate(RV::_modelView, glm::vec3(RV::panv[0], RV::panv[1], RV::panv[2]));
@@ -204,13 +246,13 @@ void GLrender(double currentTime) {
 	/*Box::drawCube();
 	Axis::drawAxis();*/
 
-	if (light_moves)
-		lightPos = glm::vec3(40 * cos((float)currentTime), 40 * sin((float)currentTime), 0);
+	//if (light_moves) lightPos = glm::vec3(40 * cos((float)currentTime), 40 * sin((float)currentTime), 0);
 
-	Sphere::updateSphere(lightPos, 1.0f);
-	Sphere::drawSphere();
-	MyLoadedModel::drawModel();
+	//Sphere::updateSphere(lightPos, 1.0f);
+	//Sphere::drawSphere();
+	//MyLoadedModel::drawModel();
 
+	Cube::myDrawCubesWheel(currentTime);
 
 
 	ImGui::Render();
@@ -324,6 +366,24 @@ void main() {\n\
 		glDeleteShader(cubeShaders[1]);
 	}
 	void drawCube() {
+		glBindVertexArray(cubeVao);
+		glUseProgram(cubeProgram);
+		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
+		// FLOOR
+		glUniform4f(glGetUniformLocation(cubeProgram, "color"), 0.6f, 0.6f, 0.6f, 1.f);
+		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, 0);
+		// WALLS
+		glUniform4f(glGetUniformLocation(cubeProgram, "color"), 0.f, 0.f, 0.f, 1.f);
+		glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_BYTE, (void*)(sizeof(GLubyte) * 4));
+		glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_BYTE, (void*)(sizeof(GLubyte) * 8));
+		glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_BYTE, (void*)(sizeof(GLubyte) * 12));
+		glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_BYTE, (void*)(sizeof(GLubyte) * 16));
+
+		glUseProgram(0);
+		glBindVertexArray(0);
+	}
+
+	void drawCubesWheel() {
 		glBindVertexArray(cubeVao);
 		glUseProgram(cubeProgram);
 		glUniformMatrix4fv(glGetUniformLocation(cubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
@@ -1014,5 +1074,192 @@ void main() {\n\
 
 	}
 
+
+}
+
+////////////////////////////////////////////////// CUBE
+namespace Cube {
+	GLuint myCubeVao;
+	GLuint myCubeVbo[3];
+	GLuint myCubeShaders[2];
+	GLuint myCubeProgram;
+	glm::mat4 myObjMat = glm::mat4(1.f);
+	glm::mat4 myObjMat2Cubes = glm::mat4(1.f);
+
+	extern const float myHalfW = 0.5f;
+	int myNumVerts = 24 + 6; // 4 vertex/face * 6 faces + 6 PRIMITIVE RESTART
+
+							 //   4---------7
+							 //  /|        /|
+							 // / |       / |
+							 //5---------6  |
+							 //|  0------|--3
+							 //| /       | /
+							 //|/        |/
+							 //1---------2
+	glm::vec3 myVerts[] = {
+		glm::vec3(-myHalfW, -myHalfW, -myHalfW),
+		glm::vec3(-myHalfW, -myHalfW,  myHalfW),
+		glm::vec3(myHalfW, -myHalfW,  myHalfW),
+		glm::vec3(myHalfW, -myHalfW, -myHalfW),
+		glm::vec3(-myHalfW,  myHalfW, -myHalfW),
+		glm::vec3(-myHalfW,  myHalfW,  myHalfW),
+		glm::vec3(myHalfW,  myHalfW,  myHalfW),
+		glm::vec3(myHalfW,  myHalfW, -myHalfW)
+	};
+	glm::vec3 myNorms[] = {
+		glm::vec3(0.f, -1.f,  0.f),
+		glm::vec3(0.f,  1.f,  0.f),
+		glm::vec3(-1.f,  0.f,  0.f),
+		glm::vec3(1.f,  0.f,  0.f),
+		glm::vec3(0.f,  0.f, -1.f),
+		glm::vec3(0.f,  0.f,  1.f)
+	};
+
+	glm::vec3 myCubeVerts[] = {
+		myVerts[1], myVerts[0], myVerts[2], myVerts[3],
+		myVerts[5], myVerts[6], myVerts[4], myVerts[7],
+		myVerts[1], myVerts[5], myVerts[0], myVerts[4],
+		myVerts[2], myVerts[3], myVerts[6], myVerts[7],
+		myVerts[0], myVerts[4], myVerts[3], myVerts[7],
+		myVerts[1], myVerts[2], myVerts[5], myVerts[6]
+	};
+	glm::vec3 myCubeNorms[] = {
+		myNorms[0], myNorms[0], myNorms[0], myNorms[0],
+		myNorms[1], myNorms[1], myNorms[1], myNorms[1],
+		myNorms[2], myNorms[2], myNorms[2], myNorms[2],
+		myNorms[3], myNorms[3], myNorms[3], myNorms[3],
+		myNorms[4], myNorms[4], myNorms[4], myNorms[4],
+		myNorms[5], myNorms[5], myNorms[5], myNorms[5]
+	};
+	GLubyte myCubeIdx[] = {
+		0, 1, 2, 3, UCHAR_MAX,
+		4, 5, 6, 7, UCHAR_MAX,
+		8, 9, 10, 11, UCHAR_MAX,
+		12, 13, 14, 15, UCHAR_MAX,
+		16, 17, 18, 19, UCHAR_MAX,
+		20, 21, 22, 23, UCHAR_MAX
+	};
+
+	const char* myCube_vertShader =
+		"#version 330\n\
+	in vec3 in_Position;\n\
+	in vec3 in_Normal;\n\
+	out vec4 vert_Normal;\n\
+	uniform mat4 objMat;\n\
+	uniform mat4 mv_Mat;\n\
+	uniform mat4 mvpMat;\n\
+	void main() {\n\
+		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
+		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+	}";
+
+
+	const char* myCube_fragShader =
+		"#version 330\n\
+in vec4 vert_Normal;\n\
+out vec4 out_Color;\n\
+uniform mat4 mv_Mat;\n\
+uniform vec4 color;\n\
+void main() {\n\
+	out_Color = vec4(color.xyz * dot(vert_Normal, mv_Mat*vec4(0.0, 1.0, 0.0, 0.0)) + color.xyz * 0.3, 1.0 );\n\
+}";
+
+	void mySetupCube() {
+		glGenVertexArrays(1, &myCubeVao);
+		glBindVertexArray(myCubeVao);
+		glGenBuffers(3, myCubeVbo);
+
+		glBindBuffer(GL_ARRAY_BUFFER, myCubeVbo[0]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(myCubeVerts), myCubeVerts, GL_STATIC_DRAW);
+		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(0);
+
+		glBindBuffer(GL_ARRAY_BUFFER, myCubeVbo[1]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(myCubeNorms), myCubeNorms, GL_STATIC_DRAW);
+		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(1);
+
+		glPrimitiveRestartIndex(UCHAR_MAX);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, myCubeVbo[2]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(myCubeIdx), myCubeIdx, GL_STATIC_DRAW);
+
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		myCubeShaders[0] = compileShader(myCube_vertShader, GL_VERTEX_SHADER, "cubeVert");
+		myCubeShaders[1] = compileShader(myCube_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
+
+		myCubeProgram = glCreateProgram();
+		glAttachShader(myCubeProgram, myCubeShaders[0]);
+		glAttachShader(myCubeProgram, myCubeShaders[1]);
+		glBindAttribLocation(myCubeProgram, 0, "in_Position");
+		glBindAttribLocation(myCubeProgram, 1, "in_Normal");
+		linkProgram(myCubeProgram);
+	}
+	void myCleanupCube() {
+		glDeleteBuffers(3, myCubeVbo);
+		glDeleteVertexArrays(1, &myCubeVao);
+
+		glDeleteProgram(myCubeProgram);
+		glDeleteShader(myCubeShaders[0]);
+		glDeleteShader(myCubeShaders[1]);
+	}
+	void myUpdateCube(const glm::mat4& transform) {
+		myObjMat = transform;
+	}
+	void myDrawCube() {
+		glEnable(GL_PRIMITIVE_RESTART);
+		glBindVertexArray(myCubeVao);
+		glUseProgram(myCubeProgram);
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 0.1f, 1.f, 1.f, 0.f);
+		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
+
+		glUseProgram(0);
+		glBindVertexArray(0);
+		glDisable(GL_PRIMITIVE_RESTART);
+	}
+	void myDrawCubesWheel(double currentTime) {
+
+		glEnable(GL_PRIMITIVE_RESTART);
+		glBindVertexArray(myCubeVao);
+		glUseProgram(myCubeProgram);
+
+		//CUBS
+		for (int i = 1; i <= 20; i++) {
+			float posX, posY, radius, frec;
+			radius = 10.f;
+			frec = 0.1f;
+			posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / 20));
+			posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / 20));
+
+			glm::mat4 translation = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+			myObjMat = translation;
+
+			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
+			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.f, 0.f, 0.f);
+			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
+
+		}
+
+		/*glm::mat4 translacio_cub1 = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, 0.f));
+		myObjMat = translacio_cub1;
+
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.f, 0.f, 0.f);
+		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);*/
+
+		glUseProgram(0);
+		glBindVertexArray(0);
+		glDisable(GL_PRIMITIVE_RESTART);
+	}
 
 }
