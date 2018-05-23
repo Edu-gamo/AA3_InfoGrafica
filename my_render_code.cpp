@@ -36,21 +36,67 @@ bool show_test_window = false;
 
 int exercice, camPos;
 bool day, bombilla, toonShader, showModels;
+double timer_camera, timer_day;
+glm::vec3 sunColor;
 
 
-bool light_moves = true;
 void GUI() {
 	bool show = true;
 	ImGui::Begin("Simulation Parameters", &show, 0);
 
 	// Do your GUI code here....
 	{
-		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);//FrameRate
+		//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);//FrameRate
 
+		ImGui::Text("Exercise: %.2d", exercice);
+		if (ImGui::Button("Next exercise")) {
+			exercice++;
+			if (exercice > 2) {
+				exercice = 1;
+			}
+		}
+		if (ImGui::Button("Previous exercise")) {
+			exercice--;
+			if (exercice < 1) {
+				exercice = 2;
+			}
+		}
+		if (ImGui::Button(day ? "Day" : "Night")) {
+			day = !day;
+		}
+		if (ImGui::Button(bombilla ? "Light Bulb ON" : "Light Bulb OFF")) {
+			bombilla = !bombilla;
+		}
+		if (ImGui::Button(toonShader ? "Toon Shader ON" : "Toon Shader OFF")) {
+			toonShader = !toonShader;
+		}
+		if (ImGui::Button(showModels ? "Models" : "Cubes")) {
+			showModels = !showModels;
+		}
 
-		if (ImGui::Button("Toggle Light Move")) {
-			light_moves = !light_moves;
-
+		switch (camPos) {
+			case 0:
+				if (ImGui::Button("General shot")) {
+					camPos++;
+				}
+				break;
+			case 1:
+				if (ImGui::Button("Shot counter shot")) {
+					camPos++;
+				}
+				break;
+			case 2:
+				if (ImGui::Button("Lateral view")) {
+					camPos++;
+				}
+				break;
+			case 3:
+				if (ImGui::Button("Rotating god’s eye shot")) {
+					camPos = 0;
+				}
+				break;
+			default:
+				break;
 		}
 
 
@@ -177,26 +223,29 @@ void GLinit(int width, int height) {
 	/*Box::setupCube();
 	Axis::setupAxis();*/
 
-	//bool res = loadOBJ("farola.obj", vertices, uvs, normals);
 	//loadOBJ("chicken.obj", vertices, uvs, normals);
 	//loadOBJ("trump.obj", vertices, uvs, normals);
 
 	//MyLoadedModel::setupModel();
 
-	//lightPos = glm::vec3(40, 40, 0);
-
-	//Sphere::setupSphere(lightPos, 1.0f);
-
-	Cube::mySetupCube();
+	lightPos = glm::vec3(100, 0, 0);
 
 
-	exercice = 0;
+	exercice = 1;
 	camPos = 0;
+	timer_camera = 0;
+	timer_day = 0;
 
 	day = true;
 	bombilla = false;
 	toonShader = false;
 	showModels = false;
+
+	sunColor = glm::vec3(0.5f, 0.5f, 0.f);
+
+	Sphere::setupSphere(lightPos, 1.0f);
+
+	Cube::mySetupCube();
 
 }
 
@@ -204,7 +253,7 @@ void GLcleanup() {
 	/*Box::cleanupCube();
 	Axis::cleanupAxis();*/
 	//MyLoadedModel::cleanupModel();
-	//Sphere::cleanupSphere();
+	Sphere::cleanupSphere();
 
 	Cube::myCleanupCube();
 
@@ -213,32 +262,35 @@ void GLcleanup() {
 void GLrender(double currentTime) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	//Ejercicio 1
+	RV::_modelView = glm::mat4(1.f);
 	switch (camPos) {
 		case 0:
-			RV::panv[0] = 0.f;
-			RV::panv[1] = -5.f;
-			RV::panv[2] = -40.f;
-
-			RV::rota[0] = -0.3f;
-			RV::rota[1] = 0.f;
+			RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, -5.f, -150.f)) * glm::rotate(glm::mat4(), -30.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f));
+			//RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -175.f));
+			break;
+		case 1:
+			if (currentTime - timer_camera < 2) {
+				RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)), 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) - 2));
+			} else if(currentTime - timer_camera < 4) {
+				RV::_modelView = glm::rotate(glm::mat4(), 180.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)), 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) + 2));
+			} else {
+				timer_camera = currentTime;
+			}
 			break;
 		case 2:
-			RV::panv[0] = 0.f;
-			RV::panv[1] = 0.f;
-			RV::panv[2] = -25.f;
-
-			RV::rota[0] = 1.6f;
-			RV::rota[1] = 0.f;
+			RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -100.f)) * glm::rotate(glm::mat4(), -90.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f));
+			break;
+		case 3:
+			RV::_modelView = glm::rotate(glm::mat4(), (float)currentTime * 0.5f , glm::vec3(0.f, 0.f, 1.f)) * glm::rotate(glm::mat4(), 90.f * 3.14159f / 180.f, glm::vec3(1.f, 0.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) - 3, 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20))));
 			break;
 		default:
 			break;
 	}
 
-	RV::_modelView = glm::mat4(1.f);
+	/*RV::_modelView = glm::mat4(1.f);
 	RV::_modelView = glm::translate(RV::_modelView, glm::vec3(RV::panv[0], RV::panv[1], RV::panv[2]));
 	RV::_modelView = glm::rotate(RV::_modelView, RV::rota[1], glm::vec3(1.f, 0.f, 0.f));
-	RV::_modelView = glm::rotate(RV::_modelView, RV::rota[0], glm::vec3(0.f, 1.f, 0.f));
+	RV::_modelView = glm::rotate(RV::_modelView, RV::rota[0], glm::vec3(0.f, 1.f, 0.f));*/
 
 	RV::_MVP = RV::_projection * RV::_modelView;
 
@@ -246,10 +298,21 @@ void GLrender(double currentTime) {
 	/*Box::drawCube();
 	Axis::drawAxis();*/
 
-	//if (light_moves) lightPos = glm::vec3(40 * cos((float)currentTime), 40 * sin((float)currentTime), 0);
 
-	//Sphere::updateSphere(lightPos, 1.0f);
-	//Sphere::drawSphere();
+	float angle_sun = ((currentTime - timer_day) / 20.0f * 360.0f) * 3.14159 / 180;
+
+	if (currentTime - timer_day < 10) { //DAY
+		sunColor = glm::vec3(abs(cos(angle_sun)) * 0.25f + 0.75f, abs(sin(angle_sun)) * 0.5f + 0.25f, 0.f);
+	} else if (currentTime - timer_day < 20) { //NIGHT
+		
+	} else {
+		timer_day = currentTime;
+	}
+	
+	lightPos = glm::vec3(100 * cos(angle_sun), 100 * sin(angle_sun), 0);
+
+	Sphere::updateSphere(lightPos, 1.0f);
+	Sphere::drawSphere();
 	//MyLoadedModel::drawModel();
 
 	Cube::myDrawCubesWheel(currentTime);
@@ -625,7 +688,8 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		glUniform4f(glGetUniformLocation(sphereProgram, "color"), 0.6f, 0.1f, 0.1f, 1.f);
+		//glUniform4f(glGetUniformLocation(sphereProgram, "color"), 0.6f, 0.1f, 0.1f, 1.f);
+		glUniform4f(glGetUniformLocation(sphereProgram, "color"), sunColor.r, sunColor.g, sunColor.b, 1.f);
 		glUniform1f(glGetUniformLocation(sphereProgram, "radius"), Sphere::radius);
 		glDrawArrays(GL_POINTS, 0, 1);
 
@@ -1084,7 +1148,6 @@ namespace Cube {
 	GLuint myCubeShaders[2];
 	GLuint myCubeProgram;
 	glm::mat4 myObjMat = glm::mat4(1.f);
-	glm::mat4 myObjMat2Cubes = glm::mat4(1.f);
 
 	extern const float myHalfW = 0.5f;
 	int myNumVerts = 24 + 6; // 4 vertex/face * 6 faces + 6 PRIMITIVE RESTART
@@ -1229,33 +1292,51 @@ void main() {\n\
 		glBindVertexArray(myCubeVao);
 		glUseProgram(myCubeProgram);
 
+		float posX, posY;
+		int totalCubes = 20;
+		float radius = 50.f;
+		float frec = 0.1f;
 		//CUBS
 		for (int i = 1; i <= 20; i++) {
-			float posX, posY, radius, frec;
-			radius = 10.f;
-			frec = 0.1f;
-			posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / 20));
-			posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / 20));
+			posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
+			posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
 
-			glm::mat4 translation = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
-			myObjMat = translation;
+			glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+			glm::mat4 scale_cube = glm::scale(glm::mat4(), glm::vec3(5.f, 5.f, 5.f));
+			myObjMat = translation_cube * scale_cube;
 
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.f, 0.f, 0.f);
+			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
 			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		}
 
-		/*glm::mat4 translacio_cub1 = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, 0.f));
-		myObjMat = translacio_cub1;
+		int cube = 1;
+		posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
+		posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
+		glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+
+		//TRUMP CUBE
+		glm::mat4 translation_trump = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, 0.7f));
+		myObjMat = translation_trump * translation_cube;
 
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.f, 0.f, 0.f);
-		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);*/
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.5f, 0.f, 0.f);
+		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
+
+		//CHICKEN CUBE
+		glm::mat4 translation_chicken = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -0.7f));
+		myObjMat = translation_chicken * translation_cube;
+
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 1.f, 0.f, 0.f);
+		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		glUseProgram(0);
 		glBindVertexArray(0);
