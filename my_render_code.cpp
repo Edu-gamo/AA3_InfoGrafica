@@ -1107,9 +1107,11 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec4 ambientSun;\n\
+uniform vec4 ambientLight;\n\
+uniform vec3 sunLight;\n\
 void main() {\n\
-	out_Color = vec4(color.rgb * ambientSun.rgb, 1.0 );\n\
+	float diffuse = clamp(dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)), 0, 1);\n\
+	out_Color = vec4(color.rgb * (ambientLight.rgb + sunLight * diffuse), 1.0 );\n\
 }";
 
 	/*float u = dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)); \n\
@@ -1274,6 +1276,8 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
 			glUniform4f(glGetUniformLocation(modelProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
+			glUniform4f(glGetUniformLocation(modelProgram, "ambientLight"), 0.1f, 0.1f, 0.1f, 0.f);
+			glUniform3f(glGetUniformLocation(modelProgram, "sunLight"), sunColor.x, sunColor.y, sunColor.z);
 			glDrawArrays(GL_TRIANGLES, 0, 3492);
 		}
 
@@ -1428,10 +1432,9 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec3 ambient;\n\
-uniform vec3 ambientSun;\n\
+uniform vec3 colorSun;\n\
 void main() {\n\
-	out_Color = vec4(ambient.rgb * color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)) * ambientSun.rgb, 1.0 );\n\
+	out_Color = vec4(color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)) + color.xyz * 0.3, 1.0 );\n\
 }";
 
 	void mySetupCube() {
@@ -1515,8 +1518,7 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
 			glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
-			glUniform3f(glGetUniformLocation(myCubeProgram, "ambient"), 1.f, 1.f, 1.f);
-			glUniform3f(glGetUniformLocation(myCubeProgram, "ambientSun"), sunColor.r, sunColor.g, sunColor.b);
+			glUniform3f(glGetUniformLocation(myCubeProgram, "colorSun"), sunColor.r, sunColor.g, sunColor.b);
 			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
 			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
