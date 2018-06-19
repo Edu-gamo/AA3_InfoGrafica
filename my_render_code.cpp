@@ -28,7 +28,7 @@ std::vector< glm::vec2 > uvs_chicken;
 std::vector< glm::vec3 > normals_chicken;
 
 
-glm::vec3 lightPos;
+glm::vec3 sunPos, moonPos;
 
 
 extern bool loadOBJ(const char * path,
@@ -45,7 +45,7 @@ bool show_test_window = false;
 int exercice, camPos;
 bool day, bombilla, toonShader, showModels;
 double timer_camera, timer_day;
-glm::vec3 sunColor;
+glm::vec3 sunColor, moonColor;
 
 
 void GUI() {
@@ -149,9 +149,12 @@ namespace MyLoadedModel {
 
 namespace Sphere {
 	void setupSphere(glm::vec3 pos, float radius);
+	void setupSphereMoon(glm::vec3 pos, float radius);
 	void cleanupSphere();
 	void updateSphere(glm::vec3 pos, float radius);
+	void updateSphereMoon(glm::vec3 pos, float radius);
 	void drawSphere();
+	void drawSphereMoon();
 }
 
 namespace Cube {
@@ -244,7 +247,8 @@ void GLinit(int width, int height) {
 	MyLoadedModel::setupModelTrump();
 	MyLoadedModel::setupModelChicken();
 
-	lightPos = glm::vec3(100, 0, 0);
+	sunPos = glm::vec3(100, 0, 0);
+	moonPos = glm::vec3(-100, 0, 0);
 
 
 	exercice = 1;
@@ -258,8 +262,10 @@ void GLinit(int width, int height) {
 	showModels = false;
 
 	sunColor = glm::vec3(0.5f, 0.5f, 0.f);
+	moonColor = glm::vec3(0.5f, 0.5f, 1.f);
 
-	Sphere::setupSphere(lightPos, 1.0f);
+	Sphere::setupSphere(sunPos, 1.0f);
+	Sphere::setupSphereMoon(moonPos, 1.0f);
 
 	Cube::mySetupCube();
 
@@ -336,10 +342,13 @@ void GLrender(double currentTime) {
 		timer_day = currentTime;
 	}
 	
-	lightPos = glm::vec3(75 * cos(angle_sun), 75 * sin(angle_sun), 0);
+	sunPos = glm::vec3(75 * cos(angle_sun), 75 * sin(angle_sun), 0);
 
-	Sphere::updateSphere(lightPos, 1.0f);
+	Sphere::updateSphere(sunPos, 1.0f);
 	Sphere::drawSphere();
+
+	Sphere::updateSphereMoon(moonPos, 1.0f);
+	Sphere::drawSphereMoon();
 
 	if (showModels) {
 
@@ -599,8 +608,10 @@ void main() {\n\
 
 ////////////////////////////////////////////////// SPHERE
 namespace Sphere {
-	GLuint sphereVao;
-	GLuint sphereVbo;
+	GLuint sphereVao_sun;
+	GLuint sphereVbo_sun;
+	GLuint sphereVao_moon;
+	GLuint sphereVbo_moon;
 	GLuint sphereShaders[3];
 	GLuint sphereProgram;
 	float radius;
@@ -687,11 +698,27 @@ void main() {\n\
 
 	void setupSphere(glm::vec3 pos, float radius) {
 		Sphere::radius = radius;
-		glGenVertexArrays(1, &sphereVao);
-		glBindVertexArray(sphereVao);
-		glGenBuffers(1, &sphereVbo);
+		glGenVertexArrays(1, &sphereVao_sun);
+		glBindVertexArray(sphereVao_sun);
+		glGenBuffers(1, &sphereVbo_sun);
 
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo);
+		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_sun);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3, &pos, GL_DYNAMIC_DRAW);
+		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(0);
+
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		createSphereShaderAndProgram();
+	}
+	void setupSphereMoon(glm::vec3 pos, float radius) {
+		Sphere::radius = radius;
+		glGenVertexArrays(1, &sphereVao_moon);
+		glBindVertexArray(sphereVao_moon);
+		glGenBuffers(1, &sphereVbo_moon);
+
+		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_moon);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3, &pos, GL_DYNAMIC_DRAW);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(0);
@@ -702,13 +729,26 @@ void main() {\n\
 		createSphereShaderAndProgram();
 	}
 	void cleanupSphere() {
-		glDeleteBuffers(1, &sphereVbo);
-		glDeleteVertexArrays(1, &sphereVao);
+		glDeleteBuffers(1, &sphereVbo_sun);
+		glDeleteVertexArrays(1, &sphereVao_sun);
+
+		glDeleteBuffers(1, &sphereVbo_moon);
+		glDeleteVertexArrays(1, &sphereVao_moon);
 
 		cleanupSphereShaderAndProgram();
 	}
 	void updateSphere(glm::vec3 pos, float radius) {
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo);
+		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_sun);
+		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+		buff[0] = pos.x;
+		buff[1] = pos.y;
+		buff[2] = pos.z;
+		glUnmapBuffer(GL_ARRAY_BUFFER);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		Sphere::radius = radius;
+	}
+	void updateSphereMoon(glm::vec3 pos, float radius) {
+		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_moon);
 		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 		buff[0] = pos.x;
 		buff[1] = pos.y;
@@ -718,13 +758,29 @@ void main() {\n\
 		Sphere::radius = radius;
 	}
 	void drawSphere() {
-		glBindVertexArray(sphereVao);
+		glBindVertexArray(sphereVao_sun);
 		glUseProgram(sphereProgram);
+
+		//SUN
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		//glUniform4f(glGetUniformLocation(sphereProgram, "color"), 0.6f, 0.1f, 0.1f, 1.f);
 		glUniform4f(glGetUniformLocation(sphereProgram, "color"), sunColor.r, sunColor.g, sunColor.b, 1.f);
+		glUniform1f(glGetUniformLocation(sphereProgram, "radius"), Sphere::radius);
+		glDrawArrays(GL_POINTS, 0, 1);
+
+		glUseProgram(0);
+		glBindVertexArray(0);
+	}
+	void drawSphereMoon() {
+		glBindVertexArray(sphereVao_moon);
+		glUseProgram(sphereProgram);
+
+		//MOON
+		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
+		glUniform4f(glGetUniformLocation(sphereProgram, "color"), moonColor.r, moonColor.g, moonColor.b, 1.f);
 		glUniform1f(glGetUniformLocation(sphereProgram, "radius"), Sphere::radius);
 		glDrawArrays(GL_POINTS, 0, 1);
 
@@ -1095,10 +1151,9 @@ namespace MyLoadedModel {
 	uniform mat4 mvpMat;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
-		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
 		lDir = normalize(lPos - gl_Position.xyz );\n\
 	}";
-
 
 	const char* model_fragShader =
 		"#version 330\n\
@@ -1107,16 +1162,17 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec4 ambientLight;\n\
-uniform vec3 sunLight;\n\
+uniform vec4 ambientColor;\n\
+uniform vec4 sunColor;\n\
 void main() {\n\
-	float diffuse = clamp(dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)), 0, 1);\n\
-	out_Color = vec4(color.rgb * (ambientLight.rgb + sunLight * diffuse), 1.0 );\n\
+	out_Color = vec4(ambientColor.xyz * color.xyz + sunColor.xyz, 1.0 );\n\
 }";
 
 	/*float u = dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)); \n\
 	if (u < 0.2f) { u = 0.0f; } else if (u >= 0.2f && u < 0.4f) { u = 0.2f; } else if (u >= 0.4f && u < 0.5f) { u = 0.4f; } else { u = 1.0f; }\n\
 	out_Color = vec4(color.xyz * u, 1.0);*/
+	//out_Color = vec4(color.xyz * (ambientLight.xyz + (sunLight.xyz * diffuse)), 1.0 );\n\
+	//out_Color = vec4(ambientColor.xyz * (color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))) + (sunColor.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))), 1.0); \n\
 
 	void setupModel() {
 		glGenVertexArrays(1, &modelVao);
@@ -1243,7 +1299,7 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
 		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(modelProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
+		glUniform3f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
 		//glUniform4f(glGetUniformLocation(modelProgram, "color"), 0.5f, .5f, 1.f, 0.f);
 		glUniform4f(glGetUniformLocation(modelProgram, "color"), 1.0f, 1.f, 1.f, 0.f);
 
@@ -1275,9 +1331,10 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+			glUniform3f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
 			glUniform4f(glGetUniformLocation(modelProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
-			glUniform4f(glGetUniformLocation(modelProgram, "ambientLight"), 0.1f, 0.1f, 0.1f, 0.f);
-			glUniform3f(glGetUniformLocation(modelProgram, "sunLight"), sunColor.x, sunColor.y, sunColor.z);
+			glUniform4f(glGetUniformLocation(modelProgram, "ambientColor"), 0.1f, 0.1f, 0.1f, 0.f);
+			glUniform4f(glGetUniformLocation(modelProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z, 0.f);
 			glDrawArrays(GL_TRIANGLES, 0, 3492);
 		}
 
@@ -1420,7 +1477,7 @@ namespace Cube {
 	uniform mat4 mvpMat;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
-		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
 		lDir = normalize(lPos - gl_Position.xyz);\n\
 	}";
 
@@ -1432,9 +1489,10 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec3 colorSun;\n\
+uniform vec4 ambientColor;\n\
+uniform vec4 sunColor;\n\
 void main() {\n\
-	out_Color = vec4(color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)) + color.xyz * 0.3, 1.0 );\n\
+	out_Color = vec4(ambientColor.xyz * (color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))) + (sunColor.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))), 1.0 );\n\
 }";
 
 	void mySetupCube() {
@@ -1517,9 +1575,10 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
-			glUniform3f(glGetUniformLocation(myCubeProgram, "colorSun"), sunColor.r, sunColor.g, sunColor.b);
+			glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
 			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
+			glUniform4f(glGetUniformLocation(myCubeProgram, "ambientColor"), 0.1f, 0.1f, 0.1f, 0.f);
+			glUniform4f(glGetUniformLocation(myCubeProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z, 0.f);
 			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		}
@@ -1536,7 +1595,7 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
 		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.5f, 0.f, 0.f);
 		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
@@ -1547,7 +1606,7 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), lightPos.x, lightPos.y, lightPos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
 		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 1.f, 0.f, 0.f);
 		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
