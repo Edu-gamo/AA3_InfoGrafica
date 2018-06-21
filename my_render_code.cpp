@@ -1143,16 +1143,21 @@ namespace MyLoadedModel {
 		"#version 330\n\
 	in vec3 in_Position;\n\
 	in vec3 in_Normal;\n\
-	uniform vec3 lPos;\n\
+	uniform vec4 lPos;\n\
 	out vec3 lDir;\n\
 	out vec4 vert_Normal;\n\
 	uniform mat4 objMat;\n\
 	uniform mat4 mv_Mat;\n\
 	uniform mat4 mvpMat;\n\
+	out float diffuse;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
 		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
-		lDir = normalize(lPos - gl_Position.xyz );\n\
+		vec4 newPos = objMat * vec4(in_Position, 1.0);\n\
+		vec4 newNormal = vec4(in_Normal, 1.0);\n\
+		float dist = distance(lPos, newPos);\n\
+		vec4 lightDir = normalize(lPos - newPos);\n\
+		diffuse = dot(newNormal, lightDir) / (4*3.14159*dist*dist);\n\
 	}";
 
 	const char* model_fragShader =
@@ -1162,10 +1167,11 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec4 ambientColor;\n\
-uniform vec4 sunColor;\n\
+uniform vec3 ambientColor;\n\
+uniform vec3 sunColor;\n\
+in float diffuse;\n\
 void main() {\n\
-	out_Color = vec4(ambientColor.xyz * color.xyz + sunColor.xyz, 1.0 );\n\
+	out_Color = vec4(color.xyz * 0.5 + color.xyz * diffuse, 1.0 );\n\
 }";
 
 	/*float u = dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)); \n\
@@ -1331,10 +1337,10 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform3f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
+			glUniform4f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z, 1.0f);
 			glUniform4f(glGetUniformLocation(modelProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
-			glUniform4f(glGetUniformLocation(modelProgram, "ambientColor"), 0.1f, 0.1f, 0.1f, 0.f);
-			glUniform4f(glGetUniformLocation(modelProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z, 0.f);
+			glUniform3f(glGetUniformLocation(modelProgram, "ambientColor"), 0.1f, 0.1f, 0.1f);
+			glUniform3f(glGetUniformLocation(modelProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z);
 			glDrawArrays(GL_TRIANGLES, 0, 3492);
 		}
 
@@ -1469,16 +1475,21 @@ namespace Cube {
 		"#version 330\n\
 	in vec3 in_Position;\n\
 	in vec3 in_Normal;\n\
-	uniform vec3 lPos;\n\
+	uniform vec4 lPos;\n\
 	out vec3 lDir;\n\
 	out vec4 vert_Normal;\n\
 	uniform mat4 objMat;\n\
 	uniform mat4 mv_Mat;\n\
 	uniform mat4 mvpMat;\n\
+	out float diffuse;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
 		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
-		lDir = normalize(lPos - gl_Position.xyz);\n\
+		vec4 newPos = objMat * vec4(in_Position, 1.0);\n\
+		vec4 newNormal = vec4(in_Normal, 1.0);\n\
+		float dist = distance(lPos, newPos);\n\
+		vec4 lightDir = normalize(lPos - newPos);\n\
+		diffuse = dot(newNormal, lightDir) / (4*3.14159*dist*dist);\n\
 	}";
 
 
@@ -1489,10 +1500,11 @@ in vec3 lDir;\n\
 out vec4 out_Color;\n\
 uniform mat4 mv_Mat;\n\
 uniform vec4 color;\n\
-uniform vec4 ambientColor;\n\
-uniform vec4 sunColor;\n\
+uniform vec3 ambientColor;\n\
+uniform vec3 sunColor;\n\
+in float diffuse;\n\
 void main() {\n\
-	out_Color = vec4(ambientColor.xyz * (color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))) + (sunColor.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))), 1.0 );\n\
+	out_Color = vec4(color.xyz * 0.5 + color.xyz * diffuse, 1.0 );\n\
 }";
 
 	void mySetupCube() {
@@ -1575,10 +1587,10 @@ void main() {\n\
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
+			glUniform4f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z, 1.0f);
 			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
-			glUniform4f(glGetUniformLocation(myCubeProgram, "ambientColor"), 0.1f, 0.1f, 0.1f, 0.f);
-			glUniform4f(glGetUniformLocation(myCubeProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z, 0.f);
+			glUniform3f(glGetUniformLocation(myCubeProgram, "ambientColor"), 0.1f, 0.1f, 0.1f);
+			glUniform3f(glGetUniformLocation(myCubeProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z);
 			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		}
