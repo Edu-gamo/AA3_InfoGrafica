@@ -33,6 +33,47 @@ int cabinNum = 9;
 
 glm::vec3 ambientColor = glm::vec3(0.3, 0.3, 0.2);
 
+void setVariables(int inExercice) {
+	switch (inExercice) {
+	case 1:
+		showModels = false;
+		break;
+	case 2:
+		showModels = true;
+		break;
+	case 3:
+		camPos = 1;
+		break;
+	case 4:
+		camPos = 3;
+		break;
+	case 5:
+		day = true;
+		break;
+	case 6:
+		camPos = 2;
+		day = false;
+		bombilla = 1;
+		break;
+	case 7:
+		camPos = 2;
+		day = false;
+		bombilla = 2;
+		break;
+	case 9:
+		toonShader = 1;
+		break;
+	case 10:
+		toonShader = 2;
+		break;
+	case 11:
+		toonShader = 3;
+		break;
+	default:
+		break;
+	}
+}
+
 
 void GUI() {
 	bool show = true;
@@ -42,35 +83,44 @@ void GUI() {
 	{
 		//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);//FrameRate
 
-		ImGui::Text("Scene: %.2d", exercice);
-		if (ImGui::Button("Next exercise")) {
+		ImGui::Text("Exercise: %.2d", exercice);
+		if (ImGui::Button("Next exercise (A)")) {
 			exercice++;
-			if (exercice > 2) {
+			if (exercice > 11) {
 				exercice = 1;
 			}
+			setVariables(exercice);
 		}
-		if (ImGui::Button("Previous exercise")) {
+		if (ImGui::Button("Previous exercise (Z)")) {
 			exercice--;
 			if (exercice < 1) {
-				exercice = 2;
+				exercice = 11;
 			}
+			setVariables(exercice);
 		}
-		if (ImGui::Button(day ? "Day" : "Night")) {
+		if (ImGui::Button("Day/Night Transition (D)")) {
 			day = !day;
 		}
 		switch (bombilla) {
 		case 0:
-			if (ImGui::Button("Light Bulb OFF")) {
+			if (ImGui::Button("Light Bulb variant (B): Light Bulb OFF")) {
+				camPos = 1;
+				showModels = true;
+				day = false;
 				bombilla++;
 			}
 			break;
 		case 1:
-			if (ImGui::Button("Light Bulb ON")) {
+			if (ImGui::Button("Light Bulb variant (B): Light Bulb ON")) {
+				camPos = 1;
+				showModels = true;
+				day = false;
 				bombilla++;
 			}
 			break;
 		case 2:
-			if (ImGui::Button("Light Bulb Move")) {
+			if (ImGui::Button("Light Bulb variant (B): Light Bulb Move")) {
+				day = true;
 				bombilla = 0;
 			}
 			break;
@@ -79,58 +129,58 @@ void GUI() {
 		}
 		switch (toonShader) {
 		case 0:
-			if (ImGui::Button("Toon Shader OFF")) {
+			if (ImGui::Button("Toon Shader Variant (T): Toon Shader OFF")) {
 				toonShader++;
 			}
 			break;
 		case 1:
-			if (ImGui::Button("Toon Shader Sun")) {
+			if (ImGui::Button("Toon Shader Variant (T): Toon Shader Sun")) {
 				toonShader++;
 			}
 			break;
 		case 2:
-			if (ImGui::Button("Toon Shader Sun/Moon")) {
+			if (ImGui::Button("Toon Shader Variant (T): Toon Shader Sun/Moon")) {
 				toonShader++;
 			}
 			break;
 		case 3:
-			if (ImGui::Button("Toon Shader Moon/Bulb")) {
+			if (ImGui::Button("Toon Shader Variant (T): Toon Shader Moon/Bulb")) {
 				toonShader = 0;
 			}
 			break;
 		default:
 			break;
 		}
-		if (ImGui::Button(showModels ? "Models" : "Cubes")) {
-			showModels = !showModels;
-		}
-
 		switch (camPos) {
 			case 0:
-				if (ImGui::Button("General shot")) {
+				if (ImGui::Button("Camera Position (C): General shot")) {
 					camPos++;
 				}
 				break;
 			case 1:
-				if (ImGui::Button("Shot counter shot")) {
+				if (ImGui::Button("Camera Position (C): Shot counter shot")) {
 					camPos++;
 				}
 				break;
 			case 2:
-				if (ImGui::Button("Lateral view")) {
+				if (ImGui::Button("Camera Position (C): Lateral view")) {
 					camPos++;
 				}
 				break;
 			case 3:
-				if (ImGui::Button("Rotating god’s eye shot")) {
+				if (ImGui::Button("Camera Position (C): Rotating god’s eye shot")) {
 					camPos = 0;
 				}
 				break;
 			default:
 				break;
 		}
-
-
+		if (ImGui::Button("Model transition (M)")) {
+			showModels = !showModels;
+		}
+		if (ImGui::Button("Two Wheels Scene WIP (S)")) {
+			exercice = 8;
+		}
 	}
 	// .........................
 
@@ -365,6 +415,14 @@ void GLrender(double currentTime) {
 			toonShader++;
 			if (toonShader > 3) toonShader = 0;
 		}
+		if (ImGui::IsKeyPressed('a', false)) {
+			exercice++;
+			setVariables(exercice);
+		}
+		if (ImGui::IsKeyPressed('z', false)) {
+			exercice--;
+			setVariables(exercice);
+		}
 	}
 
 	RV::_modelView = glm::mat4(1.f);
@@ -391,6 +449,7 @@ void GLrender(double currentTime) {
 		default:
 			break;
 	}
+
 
 	/*RV::_modelView = glm::mat4(1.f);
 	RV::_modelView = glm::translate(RV::_modelView, glm::vec3(RV::panv[0], RV::panv[1], RV::panv[2]));
@@ -464,8 +523,6 @@ void GLrender(double currentTime) {
 	} else {
 		timer_day = currentTime;
 	}*/
-	
-	
 
 	Sphere::update(Sphere::sun);
 	Sphere::draw(Sphere::sun);
@@ -473,7 +530,11 @@ void GLrender(double currentTime) {
 	Sphere::update(Sphere::moon);
 	Sphere::draw(Sphere::moon);
 
-	if (exercice == 1) {
+	if (exercice == 8) {
+
+		models3D::draw2Wheels(currentTime);
+
+	} else {
 
 		if (showModels) {
 
@@ -484,18 +545,11 @@ void GLrender(double currentTime) {
 
 			models3D::draw(models3D::wheel);
 			models3D::draw(models3D::base);
-
 		}
 		else {
 
 			Cube::myDrawCubesWheel(currentTime);
-
 		}
-
-	} else {
-
-		models3D::draw2Wheels(currentTime);
-
 	}
 
 	ImGui::Render();
