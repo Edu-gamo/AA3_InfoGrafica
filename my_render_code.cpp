@@ -13,39 +13,25 @@
 
 #include <imgui\imgui.h>
 #include <imgui\imgui_impl_sdl_gl3.h>
-//variables to load an object:
 
-std::vector< glm::vec3 > vertices;
-std::vector< glm::vec2 > uvs;
-std::vector< glm::vec3 > normals;
+#include <iostream>
+#include <string>
 
-std::vector< glm::vec3 > vertices_trump;
-std::vector< glm::vec2 > uvs_trump;
-std::vector< glm::vec3 > normals_trump;
-
-std::vector< glm::vec3 > vertices_chicken;
-std::vector< glm::vec2 > uvs_chicken;
-std::vector< glm::vec3 > normals_chicken;
-
-
-glm::vec3 sunPos, moonPos;
-
-
-extern bool loadOBJ(const char * path,
-	std::vector < glm::vec3 > & out_vertices,
-	std::vector < glm::vec2 > & out_uvs,
-	std::vector < glm::vec3 > & out_normals
-);
-
-
+extern bool loadOBJ(const char * path, std::vector < glm::vec3 > & out_vertices, std::vector < glm::vec2 > & out_uvs, std::vector < glm::vec3 > & out_normals);
 
 bool show_test_window = false;
 
+int exercice, camPos, bombilla, toonShader;
+bool day, showModels;
+double timer_camera, timer_sun, timer_moon;
 
-int exercice, camPos;
-bool day, bombilla, toonShader, showModels;
-double timer_camera, timer_day;
-glm::vec3 sunColor, moonColor;
+int totalCabins = 20;
+float radiusWheel = 50.f;
+float frecWheel = 0.1f;
+
+int cabinNum = 9;
+
+glm::vec3 ambientColor = glm::vec3(0.3, 0.3, 0.2);
 
 
 void GUI() {
@@ -72,11 +58,48 @@ void GUI() {
 		if (ImGui::Button(day ? "Day" : "Night")) {
 			day = !day;
 		}
-		if (ImGui::Button(bombilla ? "Light Bulb ON" : "Light Bulb OFF")) {
-			bombilla = !bombilla;
+		switch (bombilla) {
+		case 0:
+			if (ImGui::Button("Light Bulb OFF")) {
+				bombilla++;
+			}
+			break;
+		case 1:
+			if (ImGui::Button("Light Bulb ON")) {
+				bombilla++;
+			}
+			break;
+		case 2:
+			if (ImGui::Button("Light Bulb Move")) {
+				bombilla = 0;
+			}
+			break;
+		default:
+			break;
 		}
-		if (ImGui::Button(toonShader ? "Toon Shader ON" : "Toon Shader OFF")) {
-			toonShader = !toonShader;
+		switch (toonShader) {
+		case 0:
+			if (ImGui::Button("Toon Shader OFF")) {
+				toonShader++;
+			}
+			break;
+		case 1:
+			if (ImGui::Button("Toon Shader Sun")) {
+				toonShader++;
+			}
+			break;
+		case 2:
+			if (ImGui::Button("Toon Shader Sun/Moon")) {
+				toonShader++;
+			}
+			break;
+		case 3:
+			if (ImGui::Button("Toon Shader Moon/Bulb")) {
+				toonShader = 0;
+			}
+			break;
+		default:
+			break;
 		}
 		if (ImGui::Button(showModels ? "Models" : "Cubes")) {
 			showModels = !showModels;
@@ -135,26 +158,63 @@ namespace Axis {
 	void drawAxis();
 }
 
-namespace MyLoadedModel {
-	void setupModel();
-	void setupModelTrump();
-	void setupModelChicken();
-	void cleanupModel();
-	void updateModel(const glm::mat4& transform);
-	void drawModel();
-	void myDrawWheel(double currentTime);
-	void myDrawTrump(double currentTime);
-	void myDrawChicken(double currentTime);
+namespace models3D {
+
+	struct model {
+
+	public:
+		std::vector<glm::vec3> vertices;
+		std::vector<glm::vec2> uvs;
+		std::vector<glm::vec3> normals;
+
+		glm::vec3 color;
+
+		glm::mat4 objMat = glm::mat4(1.0f);
+
+		GLuint vao;
+		GLuint vbo[2];
+		GLuint shaders[2];
+		GLuint program;
+
+	};
+
+	model create(std::string name, float scale, glm::vec3 initColor);
+	void cleanUp(model aModel);
+	void draw(model aModel);
+	void drawCabins(model cabin, model trump, model chicken, float currentTime);
+	void draw2Wheels(float currentTime);
+
+	model trump, chicken, cabin, wheel, base;
+
 }
 
 namespace Sphere {
-	void setupSphere(glm::vec3 pos, float radius);
-	void setupSphereMoon(glm::vec3 pos, float radius);
-	void cleanupSphere();
-	void updateSphere(glm::vec3 pos, float radius);
-	void updateSphereMoon(glm::vec3 pos, float radius);
-	void drawSphere();
-	void drawSphereMoon();
+
+	struct object {
+
+	public:
+
+		glm::vec3 color;
+
+		glm::vec3 pos;
+
+		glm::mat4 objMat = glm::mat4(1.0f);
+
+		GLuint vao;
+		GLuint vbo;
+		GLuint shaders[3];
+		GLuint program;
+		float radius;
+		float intensity;
+
+	};
+
+	object create(float radius, glm::vec3 pos, glm::vec3 initColor, float intensity);
+	void cleanup(object obj);
+	void update(object obj);
+	void draw(object obj);
+
+	object sun, moon, bulb;
 }
 
 namespace Cube {
@@ -171,7 +231,7 @@ namespace Cube {
 
 namespace RenderVars {
 	const float FOV = glm::radians(65.f);
-	float zNear = 1.f;
+	float zNear = 0.5f;
 	const float zFar = 500.f;
 
 	glm::mat4 _projection;
@@ -235,37 +295,30 @@ void GLinit(int width, int height) {
 
 	RV::_projection = glm::perspective(RV::FOV, (float)width / (float)height, RV::zNear, RV::zFar);
 
-	// Setup shaders & geometry
-	/*Box::setupCube();
-	Axis::setupAxis();*/
-
-	loadOBJ("cabin.obj", vertices, uvs, normals);
-	loadOBJ("trump.obj", vertices_trump, uvs_trump, normals_trump);
-	loadOBJ("chicken.obj", vertices_chicken, uvs_chicken, normals_chicken);
-
-	MyLoadedModel::setupModel();
-	MyLoadedModel::setupModelTrump();
-	MyLoadedModel::setupModelChicken();
-
-	sunPos = glm::vec3(100, 0, 0);
-	moonPos = glm::vec3(-100, 0, 0);
-
-
 	exercice = 1;
 	camPos = 0;
 	timer_camera = 0;
-	timer_day = 0;
+	timer_sun = 0;
+	timer_moon = 0;
 
 	day = true;
-	bombilla = false;
-	toonShader = false;
+	bombilla = 0;
+	toonShader = 0;
 	showModels = false;
 
-	sunColor = glm::vec3(0.5f, 0.5f, 0.f);
-	moonColor = glm::vec3(0.5f, 0.5f, 1.f);
+	models3D::trump = models3D::create("trump.obj", 0.027f, glm::vec3(1.0f, 0.5f, 0.2f));
+	models3D::chicken = models3D::create("chicken.obj", 0.027f, glm::vec3(1.0f, 1.0f, 0.2f));
+	models3D::cabin = models3D::create("cabin.obj", 0.01f, glm::vec3(1.0f, 1.0f, 1.0f));
+	models3D::wheel = models3D::create("wheel.obj", 0.009f, glm::vec3(1.0f, 1.0f, 1.0f));
+	models3D::base = models3D::create("base.obj", 0.02f, glm::vec3(1.0f, 1.0f, 1.0f));
 
-	Sphere::setupSphere(sunPos, 1.0f);
-	Sphere::setupSphereMoon(moonPos, 1.0f);
+	glm::mat4 rotation_wheel = glm::rotate(glm::mat4(), 90.f * 3.14f / 180.f, glm::vec3(0.0f, 1.0f, 0.0f));
+	models3D::wheel.objMat = rotation_wheel * models3D::wheel.objMat;
+	models3D::base.objMat = rotation_wheel * models3D::base.objMat;
+
+	Sphere::sun = Sphere::create(1.0f, glm::vec3(100.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 80000.f);
+	Sphere::moon = Sphere::create(1.0f, glm::vec3(-100.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), 80000.f);
+	Sphere::bulb = Sphere::create(0.1f, glm::vec3(.0f, 0.0f, 0.0f), glm::vec3(.0f, .85f, .45f), 5000.f);
 
 	Cube::mySetupCube();
 
@@ -274,8 +327,16 @@ void GLinit(int width, int height) {
 void GLcleanup() {
 	/*Box::cleanupCube();
 	Axis::cleanupAxis();*/
-	MyLoadedModel::cleanupModel();
-	Sphere::cleanupSphere();
+
+	models3D::cleanUp(models3D::trump);
+	models3D::cleanUp(models3D::chicken);
+	models3D::cleanUp(models3D::cabin);
+	models3D::cleanUp(models3D::wheel);
+	models3D::cleanUp(models3D::base);
+
+	Sphere::cleanup(Sphere::sun);
+	Sphere::cleanup(Sphere::moon);
+	Sphere::cleanup(Sphere::bulb);
 
 	Cube::myCleanupCube();
 
@@ -293,6 +354,17 @@ void GLrender(double currentTime) {
 			camPos++;
 			if (camPos > 3) camPos = 0;
 		}
+		if (ImGui::IsKeyPressed('d', false)) {
+			day = !day;
+		}
+		if (ImGui::IsKeyPressed('b', false)) {
+			bombilla++;
+			if (bombilla > 2) bombilla = 0;
+		}
+		if (ImGui::IsKeyPressed('t', false)) {
+			toonShader++;
+			if (toonShader > 3) toonShader = 0;
+		}
 	}
 
 	RV::_modelView = glm::mat4(1.f);
@@ -303,9 +375,9 @@ void GLrender(double currentTime) {
 			break;
 		case 1:
 			if (currentTime - timer_camera < 2) {
-				RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)), 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) - 1));
+				RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins)), radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins)) - 1));
 			} else if(currentTime - timer_camera < 4) {
-				RV::_modelView = glm::rotate(glm::mat4(), 180.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)), 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) + 1));
+				RV::_modelView = glm::rotate(glm::mat4(), 180.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins)), radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins)) + 1));
 			} else {
 				timer_camera = currentTime;
 			}
@@ -314,7 +386,7 @@ void GLrender(double currentTime) {
 			RV::_modelView = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -100.f)) * glm::rotate(glm::mat4(), -90.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f));
 			break;
 		case 3:
-			RV::_modelView = glm::rotate(glm::mat4(), (float)currentTime * 0.5f , glm::vec3(0.f, 0.f, 1.f)) * glm::rotate(glm::mat4(), 90.f * 3.14159f / 180.f, glm::vec3(1.f, 0.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, 50 * sin(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20)) - 2, 50 * cos(2 * 3.14f * 0.1f * currentTime + ((2 * 3.14f * 11) / 20))));
+			RV::_modelView = glm::rotate(glm::mat4(), (float)currentTime * 0.5f , glm::vec3(0.f, 0.f, 1.f)) * glm::rotate(glm::mat4(), 90.f * 3.14159f / 180.f, glm::vec3(1.f, 0.f, 0.f)) * glm::translate(glm::mat4(), glm::vec3(0.f, radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins)) - 2, radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * cabinNum) / totalCabins))));
 			break;
 		default:
 			break;
@@ -331,34 +403,97 @@ void GLrender(double currentTime) {
 	/*Box::drawCube();
 	Axis::drawAxis();*/
 
+	if (day) {
+		float angle_sun = ((currentTime - timer_sun) / 20.0f * 360.0f) * 3.14159 / 180;
+		float angle_moon = ((currentTime - timer_moon) / 18.0f * 360.0f) * 3.14159 / 180;
 
-	float angle_sun = ((currentTime - timer_day) / 20.0f * 360.0f) * 3.14159 / 180;
+		if (angle_sun >= 6) {
+			timer_sun = currentTime;
+		}
+		else if (angle_sun >= 3) {
+			Sphere::sun.color = glm::vec3(0.f, 0.f, 0.f);
+		}
+		else if (angle_sun >= 0) {
+			Sphere::sun.color = glm::vec3(abs(cos(angle_sun)) * 0.25f + 0.75f, abs(sin(angle_sun)) * 0.5f + 0.25f, 0.f);
+		}
 
-	if (currentTime - timer_day < 10) { //DAY
-		sunColor = glm::vec3(abs(cos(angle_sun)) * 0.25f + 0.75f, abs(sin(angle_sun)) * 0.5f + 0.25f, 0.f);
+		if (angle_moon >= 6.25) {
+			timer_moon = currentTime;
+		}
+		else if (angle_moon >= 3) {
+			Sphere::moon.color = glm::vec3(0.f, 0.f, 0.5f);
+		}
+		else if (angle_moon >= 0) {
+			Sphere::moon.color = glm::vec3(0.f, 0.f, 0.f);
+		}
+
+		Sphere::sun.pos = glm::vec3(75 * cos(angle_sun), 75 * sin(angle_sun), 0);
+		Sphere::moon.pos = glm::vec3(-75 * cos(angle_moon), -75 * sin(angle_moon), 0);
+		Sphere::moon.pos = glm::vec4(Sphere::moon.pos, 1.0f) * glm::rotate(glm::mat4(), 135.0f * 3.14f / 180.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+
+		Sphere::bulb.color = glm::vec3(0.f, 0.f, 0.f);
+
+	} else {
+		Sphere::sun.color = glm::vec3(0.f, 0.f, 0.f);
+		Sphere::moon.color = glm::vec3(0.f, 0.f, 0.5f);
+
+		Sphere::sun.pos = glm::vec3(75 * cos(5), 75 * sin(5), 0);
+		Sphere::moon.pos = glm::vec3(-75 * cos(5), -75 * sin(5), 0);
+
+		if (bombilla > 0) {
+
+			Sphere::bulb.color = glm::vec3(.0f, .85f, .45f);
+
+			if (bombilla == 1) {
+				Sphere::bulb.pos = glm::vec3(0.f, radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * 19) / totalCabins)) + 0.4f, radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * 19) / totalCabins)));
+			} else {
+				Sphere::bulb.pos = glm::vec3(sin(currentTime) * 0.5, radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * 19) / totalCabins)) + 0.4f - abs(cos(currentTime)) * 0.5f, radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f * 19) / totalCabins)));
+			}
+
+			Sphere::update(Sphere::bulb);
+			Sphere::draw(Sphere::bulb);
+		}
+
+	}
+	/*if (currentTime - timer_day < 10) { //DAY
+		Sphere::sun.color = glm::vec3(abs(cos(angle_sun)) * 0.25f + 0.75f, abs(sin(angle_sun)) * 0.5f + 0.25f, 0.f);
+		Sphere::moon.color = glm::vec3(0.f, 0.f, 0.f);
 	} else if (currentTime - timer_day < 20) { //NIGHT
-		sunColor = glm::vec3(0.f, 0.f, 0.f);
+		Sphere::sun.color = glm::vec3(0.f, 0.f, 0.f);
+		Sphere::moon.color = glm::vec3(0.f, 0.f, 0.5f);
 	} else {
 		timer_day = currentTime;
-	}
+	}*/
 	
-	sunPos = glm::vec3(75 * cos(angle_sun), 75 * sin(angle_sun), 0);
+	
 
-	Sphere::updateSphere(sunPos, 1.0f);
-	Sphere::drawSphere();
+	Sphere::update(Sphere::sun);
+	Sphere::draw(Sphere::sun);
 
-	Sphere::updateSphereMoon(moonPos, 1.0f);
-	Sphere::drawSphereMoon();
+	Sphere::update(Sphere::moon);
+	Sphere::draw(Sphere::moon);
 
-	if (showModels) {
+	if (exercice == 1) {
 
-		MyLoadedModel::myDrawWheel(currentTime);
-		MyLoadedModel::myDrawTrump(currentTime);
-		MyLoadedModel::myDrawChicken(currentTime);
+		if (showModels) {
 
+			models3D::drawCabins(models3D::cabin, models3D::trump, models3D::chicken, currentTime);
+
+			glm::mat4 rotation_wheel = glm::rotate(glm::mat4(), -1.18f * 3.14f / 180.f, glm::vec3(1.0f, 0.0f, 0.0f));
+			models3D::wheel.objMat = rotation_wheel * models3D::wheel.objMat;
+
+			models3D::draw(models3D::wheel);
+			models3D::draw(models3D::base);
+
+		}
+		else {
+
+			Cube::myDrawCubesWheel(currentTime);
+
+		}
 	} else {
 
-		Cube::myDrawCubesWheel(currentTime);
+		models3D::draw2Wheels(currentTime);
 
 	}
 
@@ -608,13 +743,6 @@ void main() {\n\
 
 ////////////////////////////////////////////////// SPHERE
 namespace Sphere {
-	GLuint sphereVao_sun;
-	GLuint sphereVbo_sun;
-	GLuint sphereVao_moon;
-	GLuint sphereVbo_moon;
-	GLuint sphereShaders[3];
-	GLuint sphereProgram;
-	float radius;
 
 	const char* sphere_vertShader =
 		"#version 330\n\
@@ -670,39 +798,20 @@ void main() {\n\
 	out_Color = vec4(color.xyz * dot(normal, (mv_Mat*vec4(0.0, 1.0, 0.0, 0.0)).xyz) + color.xyz * 0.3, 1.0 );\n\
 }";
 
-	bool shadersCreated = false;
-	void createSphereShaderAndProgram() {
-		if (shadersCreated) return;
 
-		sphereShaders[0] = compileShader(sphere_vertShader, GL_VERTEX_SHADER, "sphereVert");
-		sphereShaders[1] = compileShader(sphere_geomShader, GL_GEOMETRY_SHADER, "sphereGeom");
-		sphereShaders[2] = compileShader(sphere_fragShader_flatColor, GL_FRAGMENT_SHADER, "sphereFrag");
+	object create(float radius, glm::vec3 pos, glm::vec3 initColor, float intensity) {
 
-		sphereProgram = glCreateProgram();
-		glAttachShader(sphereProgram, sphereShaders[0]);
-		glAttachShader(sphereProgram, sphereShaders[1]);
-		glAttachShader(sphereProgram, sphereShaders[2]);
-		glBindAttribLocation(sphereProgram, 0, "in_Position");
-		linkProgram(sphereProgram);
+		object newObject;
+		newObject.color = initColor;
+		newObject.radius = radius;
+		newObject.pos = pos;
+		newObject.intensity = intensity;
 
-		shadersCreated = true;
-	}
-	void cleanupSphereShaderAndProgram() {
-		if (!shadersCreated) return;
-		glDeleteProgram(sphereProgram);
-		glDeleteShader(sphereShaders[0]);
-		glDeleteShader(sphereShaders[1]);
-		glDeleteShader(sphereShaders[2]);
-		shadersCreated = false;
-	}
+		glGenVertexArrays(1, &newObject.vao);
+		glBindVertexArray(newObject.vao);
+		glGenBuffers(1, &newObject.vbo);
 
-	void setupSphere(glm::vec3 pos, float radius) {
-		Sphere::radius = radius;
-		glGenVertexArrays(1, &sphereVao_sun);
-		glBindVertexArray(sphereVao_sun);
-		glGenBuffers(1, &sphereVbo_sun);
-
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_sun);
+		glBindBuffer(GL_ARRAY_BUFFER, newObject.vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3, &pos, GL_DYNAMIC_DRAW);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(0);
@@ -710,78 +819,49 @@ void main() {\n\
 		glBindVertexArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		createSphereShaderAndProgram();
+		newObject.shaders[0] = compileShader(sphere_vertShader, GL_VERTEX_SHADER, "sphereVert");
+		newObject.shaders[1] = compileShader(sphere_geomShader, GL_GEOMETRY_SHADER, "sphereGeom");
+		newObject.shaders[2] = compileShader(sphere_fragShader_flatColor, GL_FRAGMENT_SHADER, "sphereFrag");
+
+		newObject.program = glCreateProgram();
+		glAttachShader(newObject.program, newObject.shaders[0]);
+		glAttachShader(newObject.program, newObject.shaders[1]);
+		glAttachShader(newObject.program, newObject.shaders[2]);
+		glBindAttribLocation(newObject.program, 0, "in_Position");
+		linkProgram(newObject.program);
+
+		return newObject;
+
 	}
-	void setupSphereMoon(glm::vec3 pos, float radius) {
-		Sphere::radius = radius;
-		glGenVertexArrays(1, &sphereVao_moon);
-		glBindVertexArray(sphereVao_moon);
-		glGenBuffers(1, &sphereVbo_moon);
 
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_moon);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3, &pos, GL_DYNAMIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
+	void cleanup(object obj) {
+		glDeleteBuffers(1, &obj.vbo);
+		glDeleteVertexArrays(1, &obj.vao);
 
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glDeleteProgram(obj.program);
+		glDeleteShader(obj.shaders[0]);
+		glDeleteShader(obj.shaders[1]);
+		glDeleteShader(obj.shaders[2]);
 
-		createSphereShaderAndProgram();
 	}
-	void cleanupSphere() {
-		glDeleteBuffers(1, &sphereVbo_sun);
-		glDeleteVertexArrays(1, &sphereVao_sun);
-
-		glDeleteBuffers(1, &sphereVbo_moon);
-		glDeleteVertexArrays(1, &sphereVao_moon);
-
-		cleanupSphereShaderAndProgram();
-	}
-	void updateSphere(glm::vec3 pos, float radius) {
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_sun);
+	void update(object obj) {
+		glBindBuffer(GL_ARRAY_BUFFER, obj.vbo);
 		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		buff[0] = pos.x;
-		buff[1] = pos.y;
-		buff[2] = pos.z;
+		buff[0] = obj.pos.x;
+		buff[1] = obj.pos.y;
+		buff[2] = obj.pos.z;
 		glUnmapBuffer(GL_ARRAY_BUFFER);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		Sphere::radius = radius;
 	}
-	void updateSphereMoon(glm::vec3 pos, float radius) {
-		glBindBuffer(GL_ARRAY_BUFFER, sphereVbo_moon);
-		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		buff[0] = pos.x;
-		buff[1] = pos.y;
-		buff[2] = pos.z;
-		glUnmapBuffer(GL_ARRAY_BUFFER);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		Sphere::radius = radius;
-	}
-	void drawSphere() {
-		glBindVertexArray(sphereVao_sun);
-		glUseProgram(sphereProgram);
+	void draw(object obj) {
+		glBindVertexArray(obj.vao);
+		glUseProgram(obj.program);
 
-		//SUN
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		glUniform4f(glGetUniformLocation(sphereProgram, "color"), sunColor.r, sunColor.g, sunColor.b, 1.f);
-		glUniform1f(glGetUniformLocation(sphereProgram, "radius"), Sphere::radius);
-		glDrawArrays(GL_POINTS, 0, 1);
-
-		glUseProgram(0);
-		glBindVertexArray(0);
-	}
-	void drawSphereMoon() {
-		glBindVertexArray(sphereVao_moon);
-		glUseProgram(sphereProgram);
-
-		//MOON
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		glUniform4f(glGetUniformLocation(sphereProgram, "color"), moonColor.r, moonColor.g, moonColor.b, 1.f);
-		glUniform1f(glGetUniformLocation(sphereProgram, "radius"), Sphere::radius);
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(obj.program, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
+		glUniform4f(glGetUniformLocation(obj.program, "color"), obj.color.r, obj.color.g, obj.color.b, 1.f);
+		glUniform1f(glGetUniformLocation(obj.program, "radius"), obj.radius);
 		glDrawArrays(GL_POINTS, 0, 1);
 
 		glUseProgram(0);
@@ -789,622 +869,350 @@ void main() {\n\
 	}
 }
 
-////////////////////////////////////////////////// CAPSULE
-namespace Capsule {
-	GLuint capsuleVao;
-	GLuint capsuleVbo[2];
-	GLuint capsuleShader[3];
-	GLuint capsuleProgram;
-	float radius;
+////////////////////////////////////////////////// models3D
+namespace models3D {
 
-	const char* capsule_vertShader =
-		"#version 330\n\
-in vec3 in_Position;\n\
-uniform mat4 mv_Mat;\n\
-void main() {\n\
-	gl_Position = mv_Mat * vec4(in_Position, 1.0);\n\
-}";
-	const char* capsule_geomShader =
-		"#version 330\n\
-layout(lines) in; \n\
-layout(triangle_strip, max_vertices = 14) out;\n\
-out vec3 eyePos;\n\
-out vec3 capPoints[2];\n\
-uniform mat4 projMat;\n\
-uniform float radius;\n\
-vec3 boxVerts[8];\n\
-int boxIdx[14];\n\
-void main(){\n\
-	vec3 A = gl_in[0].gl_Position.xyz;\n\
-	vec3 B = gl_in[1].gl_Position.xyz;\n\
-	if(gl_in[1].gl_Position.x < gl_in[0].gl_Position.x) {\n\
-		A = gl_in[1].gl_Position.xyz;\n\
-		B = gl_in[0].gl_Position.xyz;\n\
-	}\n\
-	vec3 u = vec3(0.0, 1.0, 0.0);\n\
-	if (abs(dot(u, normalize(gl_in[1].gl_Position.xyz - gl_in[0].gl_Position.xyz))) - 1.0 < 1e-6) {\n\
-		if(gl_in[1].gl_Position.y > gl_in[0].gl_Position.y) {\n\
-			A = gl_in[1].gl_Position.xyz;\n\
-			B = gl_in[0].gl_Position.xyz;\n\
-		}\n\
-		u = vec3(1.0, 0.0, 0.0);\n\
-	}\n\
-	vec3 Am = normalize(A - B); \n\
-	vec3 Bp = -Am;\n\
-	vec3 v = normalize(cross(Am, u)) * radius;\n\
-	u = normalize(cross(v, Am)) * radius;\n\
-	Am *= radius;\n\
-	Bp *= radius;\n\
-	boxVerts[0] = A + Am - u - v;\n\
-	boxVerts[1] = A + Am + u - v;\n\
-	boxVerts[2] = A + Am + u + v;\n\
-	boxVerts[3] = A + Am - u + v;\n\
-	boxVerts[4] = B + Bp - u - v;\n\
-	boxVerts[5] = B + Bp + u - v;\n\
-	boxVerts[6] = B + Bp + u + v;\n\
-	boxVerts[7] = B + Bp - u + v;\n\
-	boxIdx = int[](0, 3, 4, 7, 6, 3, 2, 1, 6, 5, 4, 1, 0, 3);\n\
-	capPoints[0] = A;\n\
-	capPoints[1] = B;\n\
-	for (int i = 0; i<14; ++i) {\n\
-		eyePos = boxVerts[boxIdx[i]];\n\
-		gl_Position = projMat * vec4(boxVerts[boxIdx[i]], 1.0);\n\
-		EmitVertex();\n\
-	}\n\
-	EndPrimitive();\n\
-}";
-	const char* capsule_fragShader_flatColor =
-		"#version 330\n\
-in vec3 eyePos;\n\
-in vec3 capPoints[2];\n\
-out vec4 out_Color;\n\
-uniform mat4 projMat;\n\
-uniform mat4 mv_Mat;\n\
-uniform vec4 color;\n\
-uniform float radius;\n\
-const int lin_steps = 30;\n\
-const int bin_steps = 5;\n\
-vec3 closestPointInSegment(vec3 p, vec3 a, vec3 b) {\n\
-	vec3 pa = p - a, ba = b - a;\n\
-	float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);\n\
-	return a + ba*h;\n\
-}\n\
-void main() {\n\
-	vec3 viewDir = normalize(eyePos);\n\
-	float step = radius / 5.0;\n\
-	vec3 nuPB = eyePos;\n\
-	int i = 0;\n\
-	for(i = 0; i < lin_steps; ++i) {\n\
-		nuPB = eyePos + viewDir*step*i;\n\
-		vec3 C = closestPointInSegment(nuPB, capPoints[0], capPoints[1]);\n\
-		float dist = length(C - nuPB) - radius;\n\
-		if(dist < 0.0) break;\n\
-	}\n\
-	if(i==lin_steps) discard;\n\
-	vec3 nuPA = nuPB - viewDir*step;\n\
-	vec3 C;\n\
-	for(i = 0; i < bin_steps; ++i) {\n\
-		vec3 nuPC = nuPA + (nuPB - nuPA)*0.5; \n\
-		C = closestPointInSegment(nuPC, capPoints[0], capPoints[1]); \n\
-		float dist = length(C - nuPC) - radius; \n\
-		if(dist > 0.0) nuPA = nuPC; \n\
-		else nuPB = nuPC; \n\
-	}\n\
-	vec4 nuPos = projMat * vec4(nuPA, 1.0);\n\
-	gl_FragDepth = ((nuPos.z / nuPos.w) + 1) * 0.5;\n\
-	vec3 normal = normalize(nuPA - C);\n\
-	out_Color = vec4(color.xyz * dot(normal, (mv_Mat*vec4(0.0, 1.0, 0.0, 0.0)).xyz) + color.xyz * 0.3, 1.0 );\n\
-}";
-
-	void setupCapsule(glm::vec3 posA, glm::vec3 posB, float radius) {
-		Capsule::radius = radius;
-		glGenVertexArrays(1, &capsuleVao);
-		glBindVertexArray(capsuleVao);
-		glGenBuffers(2, capsuleVbo);
-
-		float capsuleVerts[] = {
-			posA.x, posA.y, posA.z,
-			posB.x, posB.y, posB.z
-		};
-		GLubyte capsuleIdx[] = {
-			0, 1
-		};
-
-		glBindBuffer(GL_ARRAY_BUFFER, capsuleVbo[0]);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6, capsuleVerts, GL_DYNAMIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, capsuleVbo[1]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte) * 2, capsuleIdx, GL_STATIC_DRAW);
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		capsuleShader[0] = compileShader(capsule_vertShader, GL_VERTEX_SHADER, "capsuleVert");
-		capsuleShader[1] = compileShader(capsule_geomShader, GL_GEOMETRY_SHADER, "capsuleGeom");
-		capsuleShader[2] = compileShader(capsule_fragShader_flatColor, GL_FRAGMENT_SHADER, "capsuleFrag");
-
-		capsuleProgram = glCreateProgram();
-		glAttachShader(capsuleProgram, capsuleShader[0]);
-		glAttachShader(capsuleProgram, capsuleShader[1]);
-		glAttachShader(capsuleProgram, capsuleShader[2]);
-		glBindAttribLocation(capsuleProgram, 0, "in_Position");
-		linkProgram(capsuleProgram);
-	}
-	void cleanupCapsule() {
-		glDeleteBuffers(2, capsuleVbo);
-		glDeleteVertexArrays(1, &capsuleVao);
-
-		glDeleteProgram(capsuleProgram);
-		glDeleteShader(capsuleShader[0]);
-		glDeleteShader(capsuleShader[1]);
-		glDeleteShader(capsuleShader[2]);
-	}
-	void updateCapsule(glm::vec3 posA, glm::vec3 posB, float radius) {
-		float vertPos[] = { posA.x, posA.y, posA.z, posB.z, posB.y, posB.z };
-		glBindBuffer(GL_ARRAY_BUFFER, capsuleVbo[0]);
-		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		buff[0] = posA.x; buff[1] = posA.y; buff[2] = posA.z;
-		buff[3] = posB.x; buff[4] = posB.y; buff[5] = posB.z;
-		glUnmapBuffer(GL_ARRAY_BUFFER);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		Capsule::radius = radius;
-	}
-	void drawCapsule() {
-		glBindVertexArray(capsuleVao);
-		glUseProgram(capsuleProgram);
-		glUniformMatrix4fv(glGetUniformLocation(capsuleProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
-		glUniformMatrix4fv(glGetUniformLocation(capsuleProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(capsuleProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		glUniform4fv(glGetUniformLocation(capsuleProgram, "camPoint"), 1, &RV::_cameraPoint[0]);
-		glUniform4f(glGetUniformLocation(capsuleProgram, "color"), 0.1f, 0.6f, 0.1f, 1.f);
-		glUniform1f(glGetUniformLocation(capsuleProgram, "radius"), Capsule::radius);
-		glDrawElements(GL_LINES, 2, GL_UNSIGNED_BYTE, 0);
-
-		glUseProgram(0);
-		glBindVertexArray(0);
-	}
-}
-
-////////////////////////////////////////////////// PARTICLES
-// Same rendering as Sphere (reusing shaders)
-namespace LilSpheres {
-	GLuint particlesVao;
-	GLuint particlesVbo;
-	float radius;
-	int numparticles;
-	extern const int maxParticles = SHRT_MAX;
-
-	void setupParticles(int numTotalParticles, float radius) {
-		assert(numTotalParticles > 0);
-		assert(numTotalParticles <= SHRT_MAX);
-		numparticles = numTotalParticles;
-		LilSpheres::radius = radius;
-
-		glGenVertexArrays(1, &particlesVao);
-		glBindVertexArray(particlesVao);
-		glGenBuffers(1, &particlesVbo);
-
-		glBindBuffer(GL_ARRAY_BUFFER, particlesVbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * numparticles, 0, GL_DYNAMIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-		Sphere::createSphereShaderAndProgram();
-	}
-	void cleanupParticles() {
-		glDeleteVertexArrays(1, &particlesVao);
-		glDeleteBuffers(1, &particlesVbo);
-
-		Sphere::cleanupSphereShaderAndProgram();
-	}
-	void updateParticles(int startIdx, int count, float* array_data) {
-		glBindBuffer(GL_ARRAY_BUFFER, particlesVbo);
-		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		buff = &buff[3 * startIdx];
-		for (int i = 0; i < 3 * count; ++i) {
-			buff[i] = array_data[i];
-		}
-		glUnmapBuffer(GL_ARRAY_BUFFER);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	}
-	void drawParticles(int startIdx, int count) {
-		glBindVertexArray(particlesVao);
-		glUseProgram(Sphere::sphereProgram);
-		glUniformMatrix4fv(glGetUniformLocation(Sphere::sphereProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
-		glUniformMatrix4fv(glGetUniformLocation(Sphere::sphereProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RV::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(Sphere::sphereProgram, "projMat"), 1, GL_FALSE, glm::value_ptr(RV::_projection));
-		glUniform4f(glGetUniformLocation(Sphere::sphereProgram, "color"), 0.1f, 0.1f, 0.6f, 1.f);
-		glUniform1f(glGetUniformLocation(Sphere::sphereProgram, "radius"), LilSpheres::radius);
-		glDrawArrays(GL_POINTS, startIdx, count);
-
-		glUseProgram(0);
-		glBindVertexArray(0);
-	}
-}
-
-////////////////////////////////////////////////// CLOTH
-namespace ClothMesh {
-	GLuint clothVao;
-	GLuint clothVbo[2];
-	GLuint clothShaders[2];
-	GLuint clothProgram;
-	extern const int numCols = 14;
-	extern const int numRows = 18;
-	extern const int numVerts = numRows * numCols;
-	int numVirtualVerts;
-
-	const char* cloth_vertShader =
-		"#version 330\n\
-in vec3 in_Position;\n\
-uniform mat4 mvpMat;\n\
-void main() {\n\
-	gl_Position = mvpMat * vec4(in_Position, 1.0);\n\
-}";
-	const char* cloth_fragShader =
-		"#version 330\n\
-uniform vec4 color;\n\
-out vec4 out_Color;\n\
-void main() {\n\
-	out_Color = color;\n\
-}";
-
-	void setupClothMesh() {
-		glGenVertexArrays(1, &clothVao);
-		glBindVertexArray(clothVao);
-		glGenBuffers(2, clothVbo);
-
-		glBindBuffer(GL_ARRAY_BUFFER, clothVbo[0]);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * numVerts, 0, GL_DYNAMIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-
-		glPrimitiveRestartIndex(UCHAR_MAX);
-		constexpr int facesVertsIdx = 5 * (numCols - 1) * (numRows - 1);
-		GLubyte facesIdx[facesVertsIdx] = { 0 };
-		for (int i = 0; i < (numRows - 1); ++i) {
-			for (int j = 0; j < (numCols - 1); ++j) {
-				facesIdx[5 * (i*(numCols - 1) + j) + 0] = i*numCols + j;
-				facesIdx[5 * (i*(numCols - 1) + j) + 1] = (i + 1)*numCols + j;
-				facesIdx[5 * (i*(numCols - 1) + j) + 2] = (i + 1)*numCols + (j + 1);
-				facesIdx[5 * (i*(numCols - 1) + j) + 3] = i*numCols + (j + 1);
-				facesIdx[5 * (i*(numCols - 1) + j) + 4] = UCHAR_MAX;
-			}
-		}
-		numVirtualVerts = facesVertsIdx;
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, clothVbo[1]);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLubyte)*numVirtualVerts, facesIdx, GL_STATIC_DRAW);
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		clothShaders[0] = compileShader(cloth_vertShader, GL_VERTEX_SHADER, "clothVert");
-		clothShaders[1] = compileShader(cloth_fragShader, GL_FRAGMENT_SHADER, "clothFrag");
-
-		clothProgram = glCreateProgram();
-		glAttachShader(clothProgram, clothShaders[0]);
-		glAttachShader(clothProgram, clothShaders[1]);
-		glBindAttribLocation(clothProgram, 0, "in_Position");
-		linkProgram(clothProgram);
-	}
-	void cleanupClothMesh() {
-		glDeleteBuffers(2, clothVbo);
-		glDeleteVertexArrays(1, &clothVao);
-
-		glDeleteProgram(clothProgram);
-		glDeleteShader(clothShaders[0]);
-		glDeleteShader(clothShaders[1]);
-	}
-	void updateClothMesh(float *array_data) {
-		glBindBuffer(GL_ARRAY_BUFFER, clothVbo[0]);
-		float* buff = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-		for (int i = 0; i < 3 * numVerts; ++i) {
-			buff[i] = array_data[i];
-		}
-		glUnmapBuffer(GL_ARRAY_BUFFER);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	}
-	void drawClothMesh() {
-		glEnable(GL_PRIMITIVE_RESTART);
-		glBindVertexArray(clothVao);
-		glUseProgram(clothProgram);
-		glUniformMatrix4fv(glGetUniformLocation(clothProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RV::_MVP));
-		glUniform4f(glGetUniformLocation(clothProgram, "color"), 0.1f, 1.f, 1.f, 0.f);
-		glDrawElements(GL_LINE_LOOP, numVirtualVerts, GL_UNSIGNED_BYTE, 0);
-
-		glUseProgram(0);
-		glBindVertexArray(0);
-		glDisable(GL_PRIMITIVE_RESTART);
-	}
-}
-
-////////////////////////////////////////////////// MyModel
-namespace MyLoadedModel {
-	GLuint modelVao;
-	GLuint modelVbo[3];
-	GLuint modelVao_trump;
-	GLuint modelVbo_trump[3];
-	GLuint modelVao_chicken;
-	GLuint modelVbo_chicken[3];
-	GLuint modelShaders[2];
-	GLuint modelProgram;
-	glm::mat4 objMat = glm::mat4(1.f);
-
-
-
-	const char* model_vertShader =
-		"#version 330\n\
+	const char* models3D_vertShader =
+	"#version 330\n\
 	in vec3 in_Position;\n\
 	in vec3 in_Normal;\n\
-	uniform vec4 lPos;\n\
-	out vec3 lDir;\n\
 	out vec4 vert_Normal;\n\
 	uniform mat4 objMat;\n\
 	uniform mat4 mv_Mat;\n\
 	uniform mat4 mvpMat;\n\
-	out float diffuse;\n\
+	uniform vec3 sunPos;\n\
+	out float sunDiffuse;\n\
+	uniform vec3 moonPos;\n\
+	out float moonDiffuse;\n\
+	uniform vec3 bulbPos;\n\
+	out float bulbDiffuse;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
-		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
-		vec4 newPos = objMat * vec4(in_Position, 1.0);\n\
+		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+		vec4 newPosition = objMat * vec4(in_Position, 1.0);\n\
 		vec4 newNormal = vec4(in_Normal, 1.0);\n\
-		float dist = distance(lPos, newPos);\n\
-		vec4 lightDir = normalize(lPos - newPos);\n\
-		diffuse = dot(newNormal, lightDir) / (4*3.14159*dist*dist);\n\
+		float sunDistance = distance(sunPos, newPosition.xyz);\n\
+		vec4 sunDir = vec4(normalize(sunPos - newPosition.xyz), 1.0);\n\
+		sunDiffuse = dot(newNormal, sunDir) / (4 * 3.14 * sunDistance * sunDistance);\n\
+		float moonDistance = distance(moonPos, newPosition.xyz);\n\
+		vec4 moonDir = vec4(normalize(moonPos - newPosition.xyz), 1.0);\n\
+		moonDiffuse = dot(newNormal, moonDir) / (4 * 3.14 * moonDistance * moonDistance);\n\
+		float bulbDistance = distance(bulbPos, newPosition.xyz);\n\
+		vec4 bulbDir = vec4(normalize(bulbPos - newPosition.xyz), 1.0);\n\
+		bulbDiffuse = dot(newNormal, bulbDir) / (4 * 3.14 * bulbDistance * bulbDistance);\n\
 	}";
 
-	const char* model_fragShader =
-		"#version 330\n\
-in vec4 vert_Normal;\n\
-in vec3 lDir;\n\
-out vec4 out_Color;\n\
-uniform mat4 mv_Mat;\n\
-uniform vec4 color;\n\
-uniform vec3 ambientColor;\n\
-uniform vec3 sunColor;\n\
-in float diffuse;\n\
-void main() {\n\
-	out_Color = vec4(color.xyz * 0.5 + color.xyz * diffuse, 1.0 );\n\
-}";
+	/*const char* models3D_fragShader =
+	"#version 330\n\
+	in vec4 vert_Normal;\n\
+	out vec4 out_Color;\n\
+	uniform mat4 mv_Mat;\n\
+	uniform vec4 color;\n\
+	uniform vec3 sunColor;\n\
+	uniform float sunIntensity;\n\
+	in float sunDiffuse;\n\
+	uniform vec3 moonColor;\n\
+	in float moonDiffuse;\n\
+	uniform vec3 bulbColor;\n\
+	in float bulbDiffuse;\n\
+	uniform vec3 ambientColor;\n\
+	void main() {\n\
+		out_Color = vec4(color.xyz * sunColor * (sunDiffuse * sunIntensity) + color.xyz * moonColor * (moonDiffuse * sunIntensity) + color.xyz * bulbColor * (bulbDiffuse * 50) + color.xyz * ambientColor, 1.0);\n\
+	}";*/
 
-	/*float u = dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0)); \n\
-	if (u < 0.2f) { u = 0.0f; } else if (u >= 0.2f && u < 0.4f) { u = 0.2f; } else if (u >= 0.4f && u < 0.5f) { u = 0.4f; } else { u = 1.0f; }\n\
-	out_Color = vec4(color.xyz * u, 1.0);*/
-	//out_Color = vec4(color.xyz * (ambientLight.xyz + (sunLight.xyz * diffuse)), 1.0 );\n\
-	//out_Color = vec4(ambientColor.xyz * (color.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))) + (sunColor.xyz * dot(vert_Normal, mv_Mat*vec4(lDir.x, lDir.y, lDir.z, 0.0))), 1.0); \n\
+	const char* models3D_fragToonShader =
+	"#version 330\n\
+	in vec4 vert_Normal;\n\
+	out vec4 out_Color;\n\
+	uniform mat4 mv_Mat;\n\
+	uniform vec4 color;\n\
+	uniform vec3 sunColor;\n\
+	uniform float sunIntensity;\n\
+	in float sunDiffuse;\n\
+	uniform vec3 moonColor;\n\
+	in float moonDiffuse;\n\
+	uniform vec3 bulbColor;\n\
+	in float bulbDiffuse;\n\
+	uniform vec3 ambientColor;\n\
+	uniform int toonShaderOption;\n\
+	void main() {\n\
+		float sunDiff = 0.0;\n\
+		float moonDiff = 0.0;\n\
+		float bulbDiff = 0.0;\n\
+		if(toonShaderOption == 1 || toonShaderOption == 2) { if(sunDiffuse * sunIntensity < 0.2) { sunDiff = 0.0; } else if(sunDiffuse * sunIntensity < 0.7) { sunDiff = 0.5; } else { sunDiff = 1.0; } }\n\
+		if(toonShaderOption == 2 || toonShaderOption == 3) { if(moonDiffuse * sunIntensity < 0.2) { moonDiff = 0.0; } else if(moonDiffuse * sunIntensity < 0.7) { moonDiff = 0.5; } else { moonDiff = 1.0; } }\n\
+		if(toonShaderOption == 3) { if(bulbDiffuse * 50 < 0.2) { bulbDiff = 0.0; } else if(bulbDiffuse * 50 < 0.7) { bulbDiff = 0.5; } else { bulbDiff = 1.0; } }\n\
+		out_Color = vec4(color.xyz * sunColor * (sunDiff * sunIntensity) + color.xyz * moonColor * (moonDiff * sunIntensity) + color.xyz * bulbColor * (bulbDiff * 50) + color.xyz * ambientColor, 1.0);\n\
+	}";
 
-	void setupModel() {
-		glGenVertexArrays(1, &modelVao);
-		glBindVertexArray(modelVao);
-		glGenBuffers(3, modelVbo);
+	model create(std::string name, float scale, glm::vec3 initColor) {
 
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo[0]);
+		model newModel;
+		newModel.color = initColor;
+		newModel.objMat = glm::scale(glm::mat4(), glm::vec3(scale));
 
-		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
+		bool res = loadOBJ(name.c_str(), newModel.vertices, newModel.uvs, newModel.normals);
 
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo[1]);
-
-		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(1);
-
-
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		modelShaders[0] = compileShader(model_vertShader, GL_VERTEX_SHADER, "cubeVert");
-		modelShaders[1] = compileShader(model_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
-
-		modelProgram = glCreateProgram();
-		glAttachShader(modelProgram, modelShaders[0]);
-		glAttachShader(modelProgram, modelShaders[1]);
-		glBindAttribLocation(modelProgram, 0, "in_Position");
-		glBindAttribLocation(modelProgram, 1, "in_Normal");
-		linkProgram(modelProgram);
-	}
-	void setupModelTrump() {
-		glGenVertexArrays(1, &modelVao_trump);
-		glBindVertexArray(modelVao_trump);
-		glGenBuffers(3, modelVbo_trump);
-
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo_trump[0]);
-
-		glBufferData(GL_ARRAY_BUFFER, vertices_trump.size() * sizeof(glm::vec3), &vertices_trump[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo_trump[1]);
-
-		glBufferData(GL_ARRAY_BUFFER, normals_trump.size() * sizeof(glm::vec3), &normals_trump[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(1);
-
-
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		modelShaders[0] = compileShader(model_vertShader, GL_VERTEX_SHADER, "cubeVert");
-		modelShaders[1] = compileShader(model_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
-
-		modelProgram = glCreateProgram();
-		glAttachShader(modelProgram, modelShaders[0]);
-		glAttachShader(modelProgram, modelShaders[1]);
-		glBindAttribLocation(modelProgram, 0, "in_Position");
-		glBindAttribLocation(modelProgram, 1, "in_Normal");
-		linkProgram(modelProgram);
-	}
-	void setupModelChicken() {
-		glGenVertexArrays(1, &modelVao_chicken);
-		glBindVertexArray(modelVao_chicken);
-		glGenBuffers(3, modelVbo_chicken);
-
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo_chicken[0]);
-
-		glBufferData(GL_ARRAY_BUFFER, vertices_chicken.size() * sizeof(glm::vec3), &vertices_chicken[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(0);
-
-		glBindBuffer(GL_ARRAY_BUFFER, modelVbo_chicken[1]);
-
-		glBufferData(GL_ARRAY_BUFFER, normals_chicken.size() * sizeof(glm::vec3), &normals_chicken[0], GL_STATIC_DRAW);
-		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		glEnableVertexAttribArray(1);
-
-
-
-		glBindVertexArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		modelShaders[0] = compileShader(model_vertShader, GL_VERTEX_SHADER, "cubeVert");
-		modelShaders[1] = compileShader(model_fragShader, GL_FRAGMENT_SHADER, "cubeFrag");
-
-		modelProgram = glCreateProgram();
-		glAttachShader(modelProgram, modelShaders[0]);
-		glAttachShader(modelProgram, modelShaders[1]);
-		glBindAttribLocation(modelProgram, 0, "in_Position");
-		glBindAttribLocation(modelProgram, 1, "in_Normal");
-		linkProgram(modelProgram);
-	}
-	void cleanupModel() {
-
-		glDeleteBuffers(2, modelVbo);
-		glDeleteVertexArrays(1, &modelVao);
-
-		glDeleteBuffers(2, modelVbo_trump);
-		glDeleteVertexArrays(1, &modelVao_trump);
-
-		glDeleteBuffers(2, modelVbo_chicken);
-		glDeleteVertexArrays(1, &modelVao_chicken);
-
-		glDeleteProgram(modelProgram);
-		glDeleteShader(modelShaders[0]);
-		glDeleteShader(modelShaders[1]);
-	}
-	void updateModel(const glm::mat4& transform) {
-		objMat = transform;
-	}
-	void drawModel() {
-
-		glBindVertexArray(modelVao);
-		glUseProgram(modelProgram);
-
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
-		//glUniform4f(glGetUniformLocation(modelProgram, "color"), 0.5f, .5f, 1.f, 0.f);
-		glUniform4f(glGetUniformLocation(modelProgram, "color"), 1.0f, 1.f, 1.f, 0.f);
-
-		glDrawArrays(GL_TRIANGLES, 0, 100000);
-
-
-		glUseProgram(0);
-		glBindVertexArray(0);
-
-	}
-	void myDrawWheel(double currentTime) {
-
-		glBindVertexArray(modelVao);
-		glUseProgram(modelProgram);
-
-		float posX, posY;
-		int totalCubes = 20;
-		float radius = 50.f;
-		float frec = 0.1f;
-		//CUBS
-		for (int i = 1; i <= 20; i++) {
-			posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
-			posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
-
-			glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
-			glm::mat4 scale_cube = glm::scale(glm::mat4(), glm::vec3(0.01f, 0.01f, 0.01f));
-			objMat = translation_cube * scale_cube;
-
-			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
-			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-			glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform4f(glGetUniformLocation(modelProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z, 1.0f);
-			glUniform4f(glGetUniformLocation(modelProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
-			glUniform3f(glGetUniformLocation(modelProgram, "ambientColor"), 0.1f, 0.1f, 0.1f);
-			glUniform3f(glGetUniformLocation(modelProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z);
-			glDrawArrays(GL_TRIANGLES, 0, 3492);
+		if (res) {
+			std::cout << "Modelo " << name.c_str() << "cargado correctamente\n";
+		}
+		else {
+			std::cout << "Error al cargar el modelo " << name.c_str() << std::endl;
 		}
 
+		glGenVertexArrays(1, &newModel.vao);
+		glBindVertexArray(newModel.vao);
+		glGenBuffers(2, newModel.vbo);
+
+		glBindBuffer(GL_ARRAY_BUFFER, newModel.vbo[0]);
+
+		glBufferData(GL_ARRAY_BUFFER, newModel.vertices.size() * sizeof(glm::vec3), &newModel.vertices[0], GL_STATIC_DRAW);
+		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(0);
+
+		glBindBuffer(GL_ARRAY_BUFFER, newModel.vbo[1]);
+
+		glBufferData(GL_ARRAY_BUFFER, newModel.normals.size() * sizeof(glm::vec3), &newModel.normals[0], GL_STATIC_DRAW);
+		glVertexAttribPointer((GLuint)1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		glEnableVertexAttribArray(1);
+
+
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		newModel.shaders[0] = compileShader(models3D_vertShader, GL_VERTEX_SHADER, "objectVert");
+		newModel.shaders[1] = compileShader(models3D_fragToonShader, GL_FRAGMENT_SHADER, "objectFragToonShader");
+
+		newModel.program = glCreateProgram();
+
+		glAttachShader(newModel.program, newModel.shaders[0]);
+		glAttachShader(newModel.program, newModel.shaders[1]);
+
+		glBindAttribLocation(newModel.program, 0, "in_Position");
+		glBindAttribLocation(newModel.program, 1, "in_Normal");
+
+		linkProgram(newModel.program);
+
+		return newModel;
+
+	}
+
+	void cleanUp(model aModel) {
+
+		glDeleteBuffers(2, aModel.vbo);
+		glDeleteVertexArrays(1, &aModel.vao);
+
+		glDeleteProgram(aModel.program);
+
+		glDeleteShader(aModel.shaders[0]);
+		glDeleteShader(aModel.shaders[1]);
+
+	}
+
+	void draw(model aModel) {
+
+		glBindVertexArray(aModel.vao);
+
+		glUseProgram(aModel.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(aModel.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(aModel.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(aModel.program, "color"), aModel.color.x, aModel.color.y, aModel.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(aModel.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(aModel.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(aModel.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(aModel.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(aModel.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(aModel.program, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(aModel.program, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(aModel.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(aModel.program, "toonShaderOption"), toonShader);
+
+		glUniformMatrix4fv(glGetUniformLocation(aModel.program, "objMat"), 1, GL_FALSE, glm::value_ptr(aModel.objMat));
+		glDrawArrays(GL_TRIANGLES, 0, aModel.vertices.size());
+
+		//std::cout << aModel.vertices.size() << std::endl;
+
 		glUseProgram(0);
 		glBindVertexArray(0);
 
 	}
-	void myDrawTrump(double currentTime) {
 
-		glBindVertexArray(modelVao_trump);
-		glUseProgram(modelProgram);
+	void drawCabins(model cabin, model trump, model chicken, float currentTime) {
 
-		int cube = 1;
+		//Cabin
+		glBindVertexArray(cabin.vao);
+		glUseProgram(cabin.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(cabin.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(cabin.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(cabin.program, "color"), cabin.color.x, cabin.color.y, cabin.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(cabin.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(cabin.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(cabin.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(cabin.program, "toonShaderOption"), toonShader);
+
 		float posX, posY;
-		int totalCubes = 20;
-		float radius = 50.f;
-		float frec = 0.1f;
-		posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+		glm::mat4 objMatModel;
+		glm::mat4 translation_cabin;
 
-		glm::mat4 translation_trump = glm::translate(glm::mat4(), glm::vec3(0.f, -3.f, 1.f));
-		glm::mat4 rotate_trump = glm::rotate(glm::mat4(), 180.f * 3.14159f / 180.f, glm::vec3(0.f, 1.f, 0.f));
-		glm::mat4 scale_trump = glm::scale(glm::mat4(), glm::vec3(0.05f, 0.05f, 0.05f));
-		objMat = translation_trump * translation_cube * rotate_trump * scale_trump;
+		for (int i = 0; i < totalCabins; i++) {
 
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform4f(glGetUniformLocation(modelProgram, "color"), 1.0f, 0.5f, 0.f, 0.f);
-		glDrawArrays(GL_TRIANGLES, 0, 100000);
+			posX = radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+			posY = radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+
+			translation_cabin = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+			glm::mat4 translation = glm::translate(glm::mat4(), glm::vec3(0.f, posY + 4.0f, posX));
+			objMatModel = translation * cabin.objMat;
+
+			glUniformMatrix4fv(glGetUniformLocation(cabin.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+			glDrawArrays(GL_TRIANGLES, 0, cabin.vertices.size());
+
+		}
+
+		//Trump
+		glBindVertexArray(trump.vao);
+		glUseProgram(trump.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(trump.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(trump.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(trump.program, "color"), trump.color.x, trump.color.y, trump.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(trump.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(trump.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(trump.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(trump.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(trump.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(trump.program, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(trump.program, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(trump.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(trump.program, "toonShaderOption"), toonShader);
+
+		glm::mat4 translation_trump = glm::translate(glm::mat4(), glm::vec3(0.f, -1.0f, 2.0f));
+		glm::mat4 rotation_trump = glm::rotate(glm::mat4(), 90.f * 3.14f / 180.f, glm::vec3(0.0f, 1.0f, 0.0f));
+		objMatModel = translation_trump * translation_cabin * rotation_trump * trump.objMat;
+
+		glUniformMatrix4fv(glGetUniformLocation(trump.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+		glDrawArrays(GL_TRIANGLES, 0, trump.vertices.size());
+
+
+		//Chicken
+		glBindVertexArray(chicken.vao);
+		glUseProgram(chicken.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(chicken.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(chicken.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(chicken.program, "color"), chicken.color.x, chicken.color.y, chicken.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(chicken.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(chicken.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(chicken.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(chicken.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(chicken.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(chicken.program, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(chicken.program, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(chicken.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(chicken.program, "toonShaderOption"), toonShader);
+
+		glm::mat4 translation_chicken = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -1.5f));
+		glm::mat4 rotation_chicken = glm::rotate(glm::mat4(), 90.f * 3.14f / 180.f, glm::vec3(0.0f, 1.0f, 0.0f));
+		objMatModel = translation_chicken * translation_cabin * rotation_chicken * chicken.objMat;
+
+		glUniformMatrix4fv(glGetUniformLocation(chicken.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+		glDrawArrays(GL_TRIANGLES, 0, chicken.vertices.size());
+
+		//std::cout << aModel.vertices.size() << std::endl;
 
 		glUseProgram(0);
 		glBindVertexArray(0);
+
 	}
-	void myDrawChicken(double currentTime) {
 
-		glBindVertexArray(modelVao_chicken);
-		glUseProgram(modelProgram);
+	void draw2Wheels(float currentTime) {
 
-		int cube = 1;
+		//Wheels
+		glBindVertexArray(wheel.vao);
+		glUseProgram(wheel.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(wheel.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(wheel.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(wheel.program, "color"), wheel.color.x, wheel.color.y, wheel.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(wheel.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(wheel.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(wheel.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(wheel.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(wheel.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(wheel.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(wheel.program, "toonShaderOption"), 0);
+
+		//Wheel1
+		glm::mat4 translation_wheel1 = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, 50.f));
+		glm::mat4 rotation_wheel1 = glm::rotate(glm::mat4(), -1.18f * 3.14f / 180.f, glm::vec3(1.0f, 0.0f, 0.0f));
+		glm::mat4 objMatModel = translation_wheel1 * rotation_wheel1 * wheel.objMat;
+
+		glUniformMatrix4fv(glGetUniformLocation(wheel.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+		glDrawArrays(GL_TRIANGLES, 0, wheel.vertices.size());
+
+		//Wheel2
+		glm::mat4 translation_wheel2 = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, -50.f));
+		glm::mat4 rotation_wheel2 = glm::rotate(glm::mat4(), 1.18f * 3.14f / 180.f, glm::vec3(1.0f, 0.0f, 0.0f));
+		objMatModel = translation_wheel2 * rotation_wheel2 * wheel.objMat;
+
+		glUniformMatrix4fv(glGetUniformLocation(wheel.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+		glDrawArrays(GL_TRIANGLES, 0, wheel.vertices.size());
+
+		//Cabin
+		glBindVertexArray(cabin.vao);
+		glUseProgram(cabin.program);
+
+		glUniformMatrix4fv(glGetUniformLocation(cabin.program, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniformMatrix4fv(glGetUniformLocation(cabin.program, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniform4f(glGetUniformLocation(cabin.program, "color"), cabin.color.x, cabin.color.y, cabin.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(cabin.program, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(cabin.program, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(cabin.program, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(cabin.program, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(cabin.program, "toonShaderOption"), toonShader);
+
 		float posX, posY;
-		int totalCubes = 20;
-		float radius = 50.f;
-		float frec = 0.1f;
-		posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+		glm::mat4 translation_cabin;
 
-		glm::mat4 translation_chicken = glm::translate(glm::mat4(), glm::vec3(0.f, -1.f, -1.f));
-		glm::mat4 rotate_chicken = glm::rotate(glm::mat4(), -90.f * 3.14159f / 180.f, glm::vec3(1.f, 0.f, 0.f));
-		glm::mat4 scale_chicken = glm::scale(glm::mat4(), glm::vec3(0.02f, 0.02f, 0.02f));
-		objMat = translation_chicken * translation_cube * rotate_chicken * scale_chicken;
+		for (int i = 0; i < totalCabins; i++) {
 
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(objMat));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-		glUniformMatrix4fv(glGetUniformLocation(modelProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform4f(glGetUniformLocation(modelProgram, "color"), 1.0f, 1.f, 0.f, 0.f);
-		glDrawArrays(GL_TRIANGLES, 0, 100000);
+			posX = radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+			posY = radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+
+			translation_cabin = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX + 50.f));
+			glm::mat4 translation = glm::translate(glm::mat4(), glm::vec3(0.f, posY + 4.0f, posX + 50.f));
+			objMatModel = translation * cabin.objMat;
+
+			glUniformMatrix4fv(glGetUniformLocation(cabin.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+			glDrawArrays(GL_TRIANGLES, 0, cabin.vertices.size());
+
+
+			translation_cabin = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX - 50.f));
+			translation = glm::translate(glm::mat4(), glm::vec3(0.f, posY + 4.0f, posX - 50.f));
+			objMatModel = translation * cabin.objMat;
+
+			glUniformMatrix4fv(glGetUniformLocation(cabin.program, "objMat"), 1, GL_FALSE, glm::value_ptr(objMatModel));
+			glDrawArrays(GL_TRIANGLES, 0, cabin.vertices.size());
+
+		}
+
+		//std::cout << aModel.vertices.size() << std::endl;
 
 		glUseProgram(0);
 		glBindVertexArray(0);
-	}
 
+	}
 
 }
 
@@ -1472,40 +1280,60 @@ namespace Cube {
 	};
 
 	const char* myCube_vertShader =
-		"#version 330\n\
+	"#version 330\n\
 	in vec3 in_Position;\n\
 	in vec3 in_Normal;\n\
-	uniform vec4 lPos;\n\
-	out vec3 lDir;\n\
 	out vec4 vert_Normal;\n\
 	uniform mat4 objMat;\n\
 	uniform mat4 mv_Mat;\n\
 	uniform mat4 mvpMat;\n\
-	out float diffuse;\n\
+	uniform vec3 sunPos;\n\
+	out float sunDiffuse;\n\
+	uniform vec3 moonPos;\n\
+	out float moonDiffuse;\n\
+	uniform vec3 bulbPos;\n\
+	out float bulbDiffuse;\n\
 	void main() {\n\
 		gl_Position = mvpMat * objMat * vec4(in_Position, 1.0);\n\
-		vert_Normal = mv_Mat * objMat * vec4(normalize(in_Normal), 0.0);\n\
-		vec4 newPos = objMat * vec4(in_Position, 1.0);\n\
+		vert_Normal = mv_Mat * objMat * vec4(in_Normal, 0.0);\n\
+		vec4 newPosition = objMat * vec4(in_Position, 1.0);\n\
 		vec4 newNormal = vec4(in_Normal, 1.0);\n\
-		float dist = distance(lPos, newPos);\n\
-		vec4 lightDir = normalize(lPos - newPos);\n\
-		diffuse = dot(newNormal, lightDir) / (4*3.14159*dist*dist);\n\
+		float sunDistance = distance(sunPos, newPosition.xyz);\n\
+		vec4 sunDir = vec4(normalize(sunPos - newPosition.xyz), 1.0);\n\
+		sunDiffuse = dot(newNormal, sunDir) / (4 * 3.14 * sunDistance * sunDistance);\n\
+		float moonDistance = distance(moonPos, newPosition.xyz);\n\
+		vec4 moonDir = vec4(normalize(moonPos - newPosition.xyz), 1.0);\n\
+		moonDiffuse = dot(newNormal, moonDir) / (4 * 3.14 * moonDistance * moonDistance);\n\
+		float bulbDistance = distance(bulbPos, newPosition.xyz);\n\
+		vec4 bulbDir = vec4(normalize(bulbPos - newPosition.xyz), 1.0);\n\
+		bulbDiffuse = dot(newNormal, bulbDir) / (4 * 3.14 * bulbDistance * bulbDistance);\n\
 	}";
 
 
 	const char* myCube_fragShader =
-		"#version 330\n\
-in vec4 vert_Normal;\n\
-in vec3 lDir;\n\
-out vec4 out_Color;\n\
-uniform mat4 mv_Mat;\n\
-uniform vec4 color;\n\
-uniform vec3 ambientColor;\n\
-uniform vec3 sunColor;\n\
-in float diffuse;\n\
-void main() {\n\
-	out_Color = vec4(color.xyz * 0.5 + color.xyz * diffuse, 1.0 );\n\
-}";
+	"#version 330\n\
+	in vec4 vert_Normal;\n\
+	out vec4 out_Color;\n\
+	uniform mat4 mv_Mat;\n\
+	uniform vec4 color;\n\
+	uniform vec3 sunColor;\n\
+	uniform float sunIntensity;\n\
+	in float sunDiffuse;\n\
+	uniform vec3 moonColor;\n\
+	in float moonDiffuse;\n\
+	uniform vec3 bulbColor;\n\
+	in float bulbDiffuse;\n\
+	uniform vec3 ambientColor;\n\
+	uniform int toonShaderOption;\n\
+	void main() {\n\
+		float sunDiff = 0.0;\n\
+		float moonDiff = 0.0;\n\
+		float bulbDiff = 0.0;\n\
+		if(toonShaderOption == 1 || toonShaderOption == 2) { if(sunDiffuse * sunIntensity < 0.2) { sunDiff = 0.0; } else if(sunDiffuse * sunIntensity < 0.7) { sunDiff = 0.5; } else { sunDiff = 1.0; } }\n\
+		if(toonShaderOption == 2 || toonShaderOption == 3) { if(moonDiffuse * sunIntensity < 0.2) { moonDiff = 0.0; } else if(moonDiffuse * sunIntensity < 0.7) { moonDiff = 0.5; } else { moonDiff = 1.0; } }\n\
+		if(toonShaderOption == 3) { if(bulbDiffuse * 50 < 0.2) { bulbDiff = 0.0; } else if(bulbDiffuse * 50 < 0.7) { bulbDiff = 0.5; } else { bulbDiff = 1.0; } }\n\
+		out_Color = vec4(color.xyz * sunColor * (sunDiff * sunIntensity) + color.xyz * moonColor * (moonDiff * sunIntensity) + color.xyz * bulbColor * (bulbDiff * 50) + color.xyz * ambientColor, 1.0);\n\
+	}";
 
 	void mySetupCube() {
 		glGenVertexArrays(1, &myCubeVao);
@@ -1571,34 +1399,40 @@ void main() {\n\
 		glBindVertexArray(myCubeVao);
 		glUseProgram(myCubeProgram);
 
-		float posX, posY;
-		int totalCubes = 20;
-		float radius = 50.f;
-		float frec = 0.1f;
-		//CUBS
-		for (int i = 1; i <= 20; i++) {
-			posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
-			posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*i) / totalCubes));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
+		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), models3D::cabin.color.x, models3D::cabin.color.y, models3D::cabin.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(myCubeProgram, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(myCubeProgram, "toonShaderOption"), toonShader);
 
-			glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
-			glm::mat4 scale_cube = glm::scale(glm::mat4(), glm::vec3(5.f, 5.f, 5.f));
+		float posX, posY;
+		glm::mat4 translation_cube;
+		glm::mat4 scale_cube = glm::scale(glm::mat4(), glm::vec3(5.f, 5.f, 5.f));
+		//CUBS
+		for (int i = 0; i < totalCabins; i++) {
+
+			posX = radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+			posY = radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*i) / totalCabins));
+
+			translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
 			myObjMat = translation_cube * scale_cube;
 
 			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
-			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
-			glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-			glUniform4f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z, 1.0f);
-			glUniform4f(glGetUniformLocation(myCubeProgram, "color"), (i % 2 == 0) ? 1.f : 0.f, 0.f, (i % 2 == 0) ? 0.f : 1.f, 0.f);
-			glUniform3f(glGetUniformLocation(myCubeProgram, "ambientColor"), 0.1f, 0.1f, 0.1f);
-			glUniform3f(glGetUniformLocation(myCubeProgram, "sunColor"), sunColor.x, sunColor.y, sunColor.z);
 			glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		}
 
-		int cube = 1;
-		posX = radius * cos(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		posY = radius * sin(2 * 3.14f * frec * currentTime + ((2 * 3.14f*cube) / totalCubes));
-		glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));
+		/*int cube = 1;
+		posX = radiusWheel * cos(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*cube) / totalCabins));
+		posY = radiusWheel * sin(2 * 3.14f * frecWheel * currentTime + ((2 * 3.14f*cube) / totalCabins));
+		glm::mat4 translation_cube = glm::translate(glm::mat4(), glm::vec3(0.f, posY, posX));*/
 
 		//TRUMP CUBE
 		glm::mat4 translation_trump = glm::translate(glm::mat4(), glm::vec3(0.f, 0.f, 0.7f));
@@ -1607,8 +1441,16 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
-		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 0.5f, 0.f, 0.f);
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), models3D::trump.color.x, models3D::trump.color.y, models3D::trump.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(myCubeProgram, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(myCubeProgram, "toonShaderOption"), toonShader);
 		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		//CHICKEN CUBE
@@ -1618,8 +1460,16 @@ void main() {\n\
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "objMat"), 1, GL_FALSE, glm::value_ptr(myObjMat));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mv_Mat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_modelView));
 		glUniformMatrix4fv(glGetUniformLocation(myCubeProgram, "mvpMat"), 1, GL_FALSE, glm::value_ptr(RenderVars::_MVP));
-		glUniform3f(glGetUniformLocation(myCubeProgram, "lPos"), sunPos.x, sunPos.y, sunPos.z);
-		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), 1.f, 1.f, 0.f, 0.f);
+		glUniform4f(glGetUniformLocation(myCubeProgram, "color"), models3D::chicken.color.x, models3D::chicken.color.y, models3D::chicken.color.z, 0.f);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunPos"), Sphere::sun.pos.x, Sphere::sun.pos.y, Sphere::sun.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "sunColor"), Sphere::sun.color.x, Sphere::sun.color.y, Sphere::sun.color.z);
+		glUniform1f(glGetUniformLocation(myCubeProgram, "sunIntensity"), Sphere::sun.intensity);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonPos"), Sphere::moon.pos.x, Sphere::moon.pos.y, Sphere::moon.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "moonColor"), Sphere::moon.color.x, Sphere::moon.color.y, Sphere::moon.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbPos"), Sphere::bulb.pos.x, Sphere::bulb.pos.y, Sphere::bulb.pos.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "bulbColor"), Sphere::bulb.color.x, Sphere::bulb.color.y, Sphere::bulb.color.z);
+		glUniform3f(glGetUniformLocation(myCubeProgram, "ambientColor"), ambientColor.x, ambientColor.y, ambientColor.z);
+		glUniform1i(glGetUniformLocation(myCubeProgram, "toonShaderOption"), toonShader);
 		glDrawElements(GL_TRIANGLE_STRIP, myNumVerts, GL_UNSIGNED_BYTE, 0);
 
 		glUseProgram(0);
