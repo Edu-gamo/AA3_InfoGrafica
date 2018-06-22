@@ -42,7 +42,7 @@ void GUI() {
 	{
 		//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);//FrameRate
 
-		ImGui::Text("Exercise: %.2d", exercice);
+		ImGui::Text("Scene: %.2d", exercice);
 		if (ImGui::Button("Next exercise")) {
 			exercice++;
 			if (exercice > 2) {
@@ -491,6 +491,7 @@ void GLrender(double currentTime) {
 			Cube::myDrawCubesWheel(currentTime);
 
 		}
+
 	} else {
 
 		models3D::draw2Wheels(currentTime);
@@ -936,12 +937,15 @@ namespace models3D {
 	uniform vec3 ambientColor;\n\
 	uniform int toonShaderOption;\n\
 	void main() {\n\
-		float sunDiff = 0.0;\n\
-		float moonDiff = 0.0;\n\
-		float bulbDiff = 0.0;\n\
+		float sunDiff = sunDiffuse;\n\
+		float moonDiff = moonDiffuse;\n\
+		float bulbDiff = bulbDiffuse;\n\
 		if(toonShaderOption == 1 || toonShaderOption == 2) { if(sunDiffuse * sunIntensity < 0.2) { sunDiff = 0.0; } else if(sunDiffuse * sunIntensity < 0.7) { sunDiff = 0.5; } else { sunDiff = 1.0; } }\n\
 		if(toonShaderOption == 2 || toonShaderOption == 3) { if(moonDiffuse * sunIntensity < 0.2) { moonDiff = 0.0; } else if(moonDiffuse * sunIntensity < 0.7) { moonDiff = 0.5; } else { moonDiff = 1.0; } }\n\
 		if(toonShaderOption == 3) { if(bulbDiffuse * 50 < 0.2) { bulbDiff = 0.0; } else if(bulbDiffuse * 50 < 0.7) { bulbDiff = 0.5; } else { bulbDiff = 1.0; } }\n\
+		if(toonShaderOption == 1) { moonDiff = 0.0; bulbDiff = 0.0; }\n\
+		if(toonShaderOption == 2) { bulbDiff = 0.0; }\n\
+		if(toonShaderOption == 3) { sunDiff = 0.0; }\n\
 		out_Color = vec4(color.xyz * sunColor * (sunDiff * sunIntensity) + color.xyz * moonColor * (moonDiff * sunIntensity) + color.xyz * bulbColor * (bulbDiff * 50) + color.xyz * ambientColor, 1.0);\n\
 	}";
 
@@ -1326,12 +1330,15 @@ namespace Cube {
 	uniform vec3 ambientColor;\n\
 	uniform int toonShaderOption;\n\
 	void main() {\n\
-		float sunDiff = 0.0;\n\
-		float moonDiff = 0.0;\n\
-		float bulbDiff = 0.0;\n\
+		float sunDiff = sunDiffuse;\n\
+		float moonDiff = moonDiffuse;\n\
+		float bulbDiff = bulbDiffuse;\n\
 		if(toonShaderOption == 1 || toonShaderOption == 2) { if(sunDiffuse * sunIntensity < 0.2) { sunDiff = 0.0; } else if(sunDiffuse * sunIntensity < 0.7) { sunDiff = 0.5; } else { sunDiff = 1.0; } }\n\
 		if(toonShaderOption == 2 || toonShaderOption == 3) { if(moonDiffuse * sunIntensity < 0.2) { moonDiff = 0.0; } else if(moonDiffuse * sunIntensity < 0.7) { moonDiff = 0.5; } else { moonDiff = 1.0; } }\n\
 		if(toonShaderOption == 3) { if(bulbDiffuse * 50 < 0.2) { bulbDiff = 0.0; } else if(bulbDiffuse * 50 < 0.7) { bulbDiff = 0.5; } else { bulbDiff = 1.0; } }\n\
+		if(toonShaderOption == 1) { moonDiff = 0.0; bulbDiff = 0.0; }\n\
+		if(toonShaderOption == 2) { bulbDiff = 0.0; }\n\
+		if(toonShaderOption == 3) { sunDiff = 0.0; }\n\
 		out_Color = vec4(color.xyz * sunColor * (sunDiff * sunIntensity) + color.xyz * moonColor * (moonDiff * sunIntensity) + color.xyz * bulbColor * (bulbDiff * 50) + color.xyz * ambientColor, 1.0);\n\
 	}";
 
